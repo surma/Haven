@@ -361,7 +361,7 @@ private fun NewTabSessionPickerDialog(
 private const val SCROLL_THRESHOLD_PX = 40f
 
 /** Millis after a drag gesture before long-press selection is allowed again. */
-private const val DRAG_SELECTION_COOLDOWN_MS = 300L
+private const val DRAG_SELECTION_COOLDOWN_MS = 600L
 
 /**
  * Build an SGR-encoded mouse wheel escape sequence.
@@ -381,7 +381,7 @@ private fun sgrMouseWheel(scrollUp: Boolean, col: Int, row: Int): ByteArray {
  * composable's internal gesture handler. Behavior:
  *
  * - Long press (hold still): passes through to Terminal for selection
- * - Horizontal drag: consumed (blocks Terminal's drag-to-select)
+ * - Horizontal drag: passes through for page swiping / tab navigation
  * - Vertical drag + mouse mode: consumed, emits SGR mouse wheel sequences
  * - Vertical drag + no mouse mode: passes through for Terminal scrollback
  * - Selection already active: passes through for handle drag
@@ -421,11 +421,6 @@ private suspend fun PointerInputScope.terminalGestureInterceptor(
                 val change = event.changes.firstOrNull() ?: break
                 if (!change.pressed) break
 
-                if (inCooldown) {
-                    change.consume()
-                    continue
-                }
-
                 if (!classified) {
                     val dx = change.position.x - startX
                     val dy = change.position.y - startY
@@ -443,12 +438,16 @@ private suspend fun PointerInputScope.terminalGestureInterceptor(
                     }
                 }
 
-                if (!classified) continue
+                if (!classified) {
+                    // During cooldown, consume hold-still events to
+                    // prevent Terminal from starting a long-press selection.
+                    if (inCooldown) change.consume()
+                    continue
+                }
 
                 if (isHorizontal) {
-                    // Consume horizontal drags — blocks Terminal selection
-                    change.consume()
-                    continue
+                    // Let horizontal drags pass through for page/tab swiping
+                    break
                 }
 
                 if (isVertical && mouseMode) {
