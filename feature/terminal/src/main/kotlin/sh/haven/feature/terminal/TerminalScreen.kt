@@ -44,12 +44,14 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -74,6 +76,11 @@ fun TerminalScreen(
     val navigateToConnections by viewModel.navigateToConnections.collectAsState()
     val newTabSessionPicker by viewModel.newTabSessionPicker.collectAsState()
     val newTabLoading by viewModel.newTabLoading.collectAsState()
+    val context = LocalContext.current
+    val hackTypeface = remember {
+        ResourcesCompat.getFont(context, sh.haven.core.ui.R.font.hack_regular)
+            ?: android.graphics.Typeface.MONOSPACE
+    }
     val view = LocalView.current
 
     LaunchedEffect(navigateToConnections) {
@@ -221,6 +228,7 @@ fun TerminalScreen(
                             terminalEmulator = activeTab.emulator,
                             modifier = Modifier.fillMaxSize(),
                             initialFontSize = fontSize.sp,
+                            typeface = hackTypeface,
                             keyboardEnabled = true,
                             backgroundColor = Color(colorScheme.background),
                             foregroundColor = Color(colorScheme.foreground),
