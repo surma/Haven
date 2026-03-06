@@ -17,7 +17,7 @@ enum class SessionManager(
 ) {
     NONE("None", null, null),
     TMUX("tmux",
-        { name -> "tmux new-session -A -s $name" },
+        { name -> "tmux set -gq allow-passthrough on 2>/dev/null; tmux new-session -A -s $name" },
         "tmux ls -F '#{session_name}' 2>/dev/null",
         { name -> "tmux kill-session -t $name" },
         { old, new -> "tmux rename-session -t $old $new" },

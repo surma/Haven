@@ -147,6 +147,7 @@ private enum class AnchorTarget { START, END }
 @Composable
 fun SelectionToolbar(
     controller: SelectionController,
+    hyperlinkUri: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -173,12 +174,14 @@ fun SelectionToolbar(
                 controller.clearSelection()
             }
 
-            // Open URL
+            // Open URL (detected in selection text, or from OSC 8 hyperlink)
             SelectionIconButton(Icons.AutoMirrored.Filled.OpenInNew, "Open") {
                 val text = controller.copySelection()?.trim()
-                val url = detectUrl(text)
+                val url = detectUrl(text) ?: hyperlinkUri
                 if (url != null) {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(
+                        if (url.contains("://")) url else "https://$url"
+                    )))
                     controller.clearSelection()
                 } else {
                     Toast.makeText(context, "No URL detected", Toast.LENGTH_SHORT).show()

@@ -95,6 +95,7 @@ data class TerminalTab(
     val mouseMode: StateFlow<Boolean>,
     val oscHandler: OscHandler,
     val cwd: StateFlow<String?>,
+    val hyperlinkUri: StateFlow<String?>,
     val sendInput: (ByteArray) -> Unit,
     val resize: (Int, Int) -> Unit,
     val close: () -> Unit,
@@ -228,7 +229,9 @@ class TerminalViewModel @Inject constructor(
             val mouseTracker = MouseModeTracker()
             val oscHandler = OscHandler()
             val cwdFlow = MutableStateFlow<String?>(null)
+            val hyperlinkFlow = MutableStateFlow<String?>(null)
             oscHandler.onCwdChanged = { cwdFlow.value = it }
+            oscHandler.onHyperlink = { uri -> hyperlinkFlow.value = uri }
             val termSession = sessionManager.createTerminalSession(
                 sessionId = sessionId,
                 onDataReceived = { data, offset, length ->
@@ -264,6 +267,7 @@ class TerminalViewModel @Inject constructor(
                     mouseMode = mouseTracker.mouseMode,
                     oscHandler = oscHandler,
                     cwd = cwdFlow,
+                    hyperlinkUri = hyperlinkFlow,
                     sendInput = { data -> termSession.sendToSsh(data) },
                     resize = { cols, rows -> termSession.resize(cols, rows) },
                     close = { termSession.close() },
@@ -284,7 +288,9 @@ class TerminalViewModel @Inject constructor(
             val rnsMouseTracker = MouseModeTracker()
             val rnsOscHandler = OscHandler()
             val rnsCwdFlow = MutableStateFlow<String?>(null)
+            val rnsHyperlinkFlow = MutableStateFlow<String?>(null)
             rnsOscHandler.onCwdChanged = { rnsCwdFlow.value = it }
+            rnsOscHandler.onHyperlink = { uri -> rnsHyperlinkFlow.value = uri }
             val rnsSession = reticulumSessionManager.createTerminalSession(
                 sessionId = sessionId,
                 onDataReceived = { data, offset, length ->
@@ -320,6 +326,7 @@ class TerminalViewModel @Inject constructor(
                     mouseMode = rnsMouseTracker.mouseMode,
                     oscHandler = rnsOscHandler,
                     cwd = rnsCwdFlow,
+                    hyperlinkUri = rnsHyperlinkFlow,
                     sendInput = { data -> rnsSession.sendInput(data) },
                     resize = { cols, rows -> rnsSession.resize(cols, rows) },
                     close = { rnsSession.close() },

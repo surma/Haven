@@ -5,11 +5,13 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.Lifecycle
 
+private const val TAG = "TerminalNotifications"
 private const val CHANNEL_ID = "haven_terminal_notifications"
 private const val CHANNEL_NAME = "Terminal Notifications"
 
@@ -17,36 +19,44 @@ private const val CHANNEL_NAME = "Terminal Notifications"
  * Show a terminal notification. Foreground: Toast. Background: Android notification.
  */
 fun showTerminalNotification(context: Context, title: String, body: String, tabLabel: String) {
-    val isForeground = ProcessLifecycleOwner.get().lifecycle.currentState
-        .isAtLeast(Lifecycle.State.RESUMED)
+    Log.d(TAG, "showTerminalNotification: title='$title' body='$body' tab='$tabLabel'")
 
-    if (isForeground) {
-        val toastText = if (title.isNotEmpty()) "$title: $body" else body
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, toastText, Toast.LENGTH_LONG).show()
+    val toastText = if (title.isNotEmpty()) "$title: $body" else body
+
+    // Always show a toast (works regardless of foreground state)
+    Handler(Looper.getMainLooper()).post {
+        Toast.makeText(context, toastText, Toast.LENGTH_LONG).show()
+    }
+
+    // Also post a system notification when in background
+    try {
+        val isForeground = ProcessLifecycleOwner.get().lifecycle.currentState
+            .isAtLeast(Lifecycle.State.RESUMED)
+
+        if (!isForeground) {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                )
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val displayTitle = title.ifEmpty { tabLabel }
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(displayTitle)
+                .setContentText(body)
+                .setAutoCancel(true)
+                .build()
+
+            notificationManager.notify(System.currentTimeMillis().toInt(), notification)
         }
-    } else {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Ensure channel exists
-        if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT,
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val displayTitle = title.ifEmpty { tabLabel }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(displayTitle)
-            .setContentText(body)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+    } catch (e: Exception) {
+        Log.w(TAG, "Background notification failed", e)
     }
 }

@@ -252,9 +252,11 @@ fun TerminalScreen(
                     }
 
                     // Show selection toolbar when selecting, keyboard toolbar otherwise
+                    val currentHyperlinkUri by activeTab.hyperlinkUri.collectAsState()
                     if (selectionActive && selectionController != null) {
                         SelectionToolbar(
                             controller = selectionController!!,
+                            hyperlinkUri = currentHyperlinkUri,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
