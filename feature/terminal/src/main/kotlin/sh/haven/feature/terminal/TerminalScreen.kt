@@ -1,6 +1,9 @@
 package sh.haven.feature.terminal
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -186,6 +189,14 @@ fun TerminalScreen(
                 // key() forces Terminal recreation when switching tabs, ensuring
                 // the emulator and keyboard input are bound to the correct session.
                 key(activeTab.sessionId) {
+                    // Wire OSC 52 clipboard handler to Android ClipboardManager
+                    val clipboard = remember {
+                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    }
+                    activeTab.osc52Handler.onClipboardSet = { text ->
+                        clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
+                    }
+
                     val focusRequester = remember { FocusRequester() }
 
                     LaunchedEffect(Unit) {
