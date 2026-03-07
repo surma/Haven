@@ -564,17 +564,21 @@ private suspend fun PointerInputScope.terminalGestureInterceptor(
                             .toInt().coerceIn(0, dims.rows - 1)
                         updateSelectionEndAbsolute(ctrl, row, col)
 
-                        // Edge-scroll: when finger is near top/bottom, emit slow
-                        // scroll events so the user can extend selection beyond
-                        // the visible screen.
-                        val relY = change.position.y / size.height
-                        val now = System.currentTimeMillis()
-                        if ((relY < EDGE_SCROLL_ZONE || relY > 1f - EDGE_SCROLL_ZONE) &&
-                            now - lastEdgeScrollTime >= EDGE_SCROLL_INTERVAL_MS
-                        ) {
-                            val scrollUp = relY < EDGE_SCROLL_ZONE
-                            activeTab.sendInput(sgrMouseWheel(scrollUp, col + 1, row + 1))
-                            lastEdgeScrollTime = now
+                        // Edge-scroll: when finger is near top/bottom and mouse
+                        // mode is active, emit slow scroll events so the user
+                        // can extend selection beyond the visible screen.
+                        // Only in mouse mode — without it, SGR sequences would
+                        // appear as literal text on the prompt.
+                        if (mouseMode) {
+                            val relY = change.position.y / size.height
+                            val now = System.currentTimeMillis()
+                            if ((relY < EDGE_SCROLL_ZONE || relY > 1f - EDGE_SCROLL_ZONE) &&
+                                now - lastEdgeScrollTime >= EDGE_SCROLL_INTERVAL_MS
+                            ) {
+                                val scrollUp = relY < EDGE_SCROLL_ZONE
+                                activeTab.sendInput(sgrMouseWheel(scrollUp, col + 1, row + 1))
+                                lastEdgeScrollTime = now
+                            }
                         }
                     }
                 }

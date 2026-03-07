@@ -32,6 +32,49 @@ private const val TAG = "TerminalViewModel"
 private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
 /**
+ * Coalesces SSH/RNS data chunks into batched writes on the main thread.
+ *
+ * Without this, every onDataReceived callback posts a separate message to
+ * the main looper. During fast output this floods the queue and delays
+ * resize/layout events. This class accumulates bytes in a lock-protected
+ * buffer and only keeps one pending main-thread drain in flight at a time.
+ */
+private class EmulatorWriteBuffer(private val emulator: () -> TerminalEmulator?) {
+    private val lock = Any()
+    private var buffer = ByteArray(8192)
+    private var length = 0
+    private var drainScheduled = false
+
+    fun append(data: ByteArray, offset: Int, len: Int) {
+        synchronized(lock) {
+            if (length + len > buffer.size) {
+                buffer = buffer.copyOf(maxOf(buffer.size * 2, length + len))
+            }
+            System.arraycopy(data, offset, buffer, length, len)
+            length += len
+            if (!drainScheduled) {
+                drainScheduled = true
+                mainHandler.post(::drain)
+            }
+        }
+    }
+
+    private fun drain() {
+        val copy: ByteArray
+        val copyLen: Int
+        synchronized(lock) {
+            copyLen = length
+            copy = buffer.copyOf(copyLen)
+            length = 0
+            drainScheduled = false
+        }
+        if (copyLen > 0) {
+            emulator()?.writeInput(copy, 0, copyLen)
+        }
+    }
+}
+
+/**
  * Coalesces rapid single-byte inputs into a batch, then deduplicates only
  * the exact IME double-fire pattern (buffer == [X, X]).
  *
@@ -255,6 +298,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(baseLabel, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
+            val writeBuffer = EmulatorWriteBuffer { emulator }
             val mouseTracker = MouseModeTracker()
             val oscHandler = OscHandler()
             val cwdFlow = MutableStateFlow<String?>(null)
@@ -268,9 +312,7 @@ class TerminalViewModel @Inject constructor(
                     mouseTracker.process(oscHandler.outputBuf, 0, oscHandler.outputLen)
                     val len = oscHandler.outputLen
                     if (len > 0) {
-                        val copy = ByteArray(len)
-                        System.arraycopy(oscHandler.outputBuf, 0, copy, 0, len)
-                        mainHandler.post { emulator.writeInput(copy, 0, copy.size) }
+                        writeBuffer.append(oscHandler.outputBuf, 0, len)
                     }
                 },
             ) ?: continue
@@ -320,6 +362,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(session.label, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
+            val rnsWriteBuffer = EmulatorWriteBuffer { emulator }
             val rnsMouseTracker = MouseModeTracker()
             val rnsOscHandler = OscHandler()
             val rnsCwdFlow = MutableStateFlow<String?>(null)
@@ -333,9 +376,7 @@ class TerminalViewModel @Inject constructor(
                     rnsMouseTracker.process(rnsOscHandler.outputBuf, 0, rnsOscHandler.outputLen)
                     val len = rnsOscHandler.outputLen
                     if (len > 0) {
-                        val copy = ByteArray(len)
-                        System.arraycopy(rnsOscHandler.outputBuf, 0, copy, 0, len)
-                        mainHandler.post { emulator.writeInput(copy, 0, copy.size) }
+                        rnsWriteBuffer.append(rnsOscHandler.outputBuf, 0, len)
                     }
                 },
             ) ?: continue
