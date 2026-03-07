@@ -173,6 +173,28 @@ internal fun expandSelectionToWord(
     }
 }
 
+/**
+ * Set the selection end anchor to an absolute cell position.
+ * Used by the highlighter-drag gesture during long-press selection.
+ */
+internal fun updateSelectionEndAbsolute(
+    controller: SelectionController,
+    row: Int,
+    col: Int,
+) {
+    try {
+        val mgrField = controller.javaClass.getDeclaredField("\$selectionManager")
+        mgrField.isAccessible = true
+        val mgr = mgrField.get(controller) ?: return
+        val update = mgr.javaClass.getMethod(
+            "updateSelectionEnd", Int::class.java, Int::class.java,
+        )
+        update.invoke(mgr, row, col)
+    } catch (e: Exception) {
+        Log.d(TAG, "updateSelectionEndAbsolute: ${e.message}")
+    }
+}
+
 /** Which selection anchor the d-pad arrows control. */
 private enum class AnchorTarget { START, END }
 
