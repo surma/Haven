@@ -123,17 +123,6 @@ class TerminalViewModel @Inject constructor(
         trackedSessionIds.clear()
     }
 
-    init {
-        // React to session state changes (e.g., "Disconnect All" from notification)
-        // even when the TerminalScreen isn't actively composing.
-        viewModelScope.launch {
-            sessionManager.sessions.collect { syncSessions() }
-        }
-        viewModelScope.launch {
-            reticulumSessionManager.sessions.collect { syncSessions() }
-        }
-    }
-
     val terminalColorScheme: StateFlow<UserPreferencesRepository.TerminalColorScheme> =
         preferencesRepository.terminalColorScheme
             .stateIn(
@@ -194,8 +183,19 @@ class TerminalViewModel @Inject constructor(
 
     private val trackedSessionIds = mutableSetOf<String>()
 
+    init {
+        // React to session state changes (e.g., "Disconnect All" from notification)
+        // even when the TerminalScreen isn't actively composing.
+        viewModelScope.launch {
+            sessionManager.sessions.collect { syncSessions() }
+        }
+        viewModelScope.launch {
+            reticulumSessionManager.sessions.collect { syncSessions() }
+        }
+    }
+
     /**
-     * Called by the screen on each composition to sync tabs with session state.
+     * Sync tabs with session manager state.
      * Creates emulator + terminal session for new CONNECTED sessions.
      */
     fun syncSessions() {
