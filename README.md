@@ -24,6 +24,8 @@
 ---
 
 <p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4_connections.png" width="220" />
+  &nbsp;&nbsp;
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1_terminal.png" width="220" />
   &nbsp;&nbsp;
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2_keys.png" width="220" />
@@ -41,7 +43,7 @@
 
 **SSH Keys** — Generate Ed25519, RSA, and ECDSA keys on-device. One-tap public key copy and deploy key dialog for `authorized_keys` setup.
 
-**Connections** — Saved profiles with host key TOFU verification, fingerprint change detection, auto-reconnect with backoff, and password fallback.
+**Connections** — Saved profiles with host key TOFU verification, fingerprint change detection, auto-reconnect with backoff, password fallback, local/remote port forwarding (-L/-R), and ProxyJump multi-hop tunneling (-J) with tree view.
 
 **Reticulum** — Connect over [Reticulum](https://reticulum.network) mesh networks via [rnsh](https://github.com/acehoss/rnsh) or [Sideband](https://github.com/markqvist/Sideband) with announce-based destination discovery and hop count.
 
