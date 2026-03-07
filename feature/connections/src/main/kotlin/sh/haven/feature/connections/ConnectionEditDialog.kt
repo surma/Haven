@@ -32,6 +32,7 @@ import sh.haven.core.data.db.entities.ConnectionProfile
 fun ConnectionEditDialog(
     existing: ConnectionProfile? = null,
     discoveredDestinations: List<ConnectionsViewModel.DiscoveredDestination> = emptyList(),
+    discoveredHosts: List<DiscoveredHost> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (ConnectionProfile) -> Unit,
 ) {
@@ -90,6 +91,48 @@ fun ConnectionEditDialog(
                 Spacer(Modifier.height(8.dp))
 
                 if (connectionType == "SSH") {
+                    // Discovered hosts — filter by typed prefix
+                    val filteredHosts = remember(discoveredHosts, host) {
+                        val prefix = host.lowercase()
+                        discoveredHosts
+                            .filter {
+                                prefix.isEmpty() ||
+                                    it.address.startsWith(prefix) ||
+                                    it.hostname?.lowercase()?.contains(prefix) == true
+                            }
+                            .take(8)
+                    }
+                    if (filteredHosts.isNotEmpty()) {
+                        Text(
+                            text = "Discovered (${filteredHosts.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            filteredHosts.forEach { disc ->
+                                val chipLabel = disc.hostname ?: disc.address
+                                SuggestionChip(
+                                    onClick = {
+                                        host = disc.address
+                                        if (disc.port != 22) port = disc.port.toString()
+                                        if (label.isBlank() && disc.hostname != null) {
+                                            label = disc.hostname
+                                        }
+                                    },
+                                    label = {
+                                        Text(
+                                            text = chipLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+
                     OutlinedTextField(
                         value = host,
                         onValueChange = { host = it },

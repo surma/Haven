@@ -81,6 +81,7 @@ fun ConnectionsScreen(
     val sshKeys by viewModel.sshKeys.collectAsState()
     val profileStatuses by viewModel.profileStatuses.collectAsState()
     val discoveredDestinations by viewModel.discoveredDestinations.collectAsState()
+    val discoveredHosts by viewModel.discoveredHosts.collectAsState()
     val connectingProfileId by viewModel.connectingProfileId.collectAsState()
     val error by viewModel.error.collectAsState()
     val navigateToTerminal by viewModel.navigateToTerminal.collectAsState()
@@ -141,12 +142,17 @@ fun ConnectionsScreen(
     // arriving over slow LoRa links. Stops when the screen is disposed.
     DisposableEffect(Unit) {
         viewModel.startPeriodicRefresh()
-        onDispose { viewModel.stopPeriodicRefresh() }
+        viewModel.startNetworkDiscovery()
+        onDispose {
+            viewModel.stopPeriodicRefresh()
+            viewModel.stopNetworkDiscovery()
+        }
     }
 
     if (showAddDialog) {
         ConnectionEditDialog(
             discoveredDestinations = discoveredDestinations,
+            discoveredHosts = discoveredHosts,
             onDismiss = { showAddDialog = false },
             onSave = { profile ->
                 viewModel.saveConnection(profile)
@@ -159,6 +165,7 @@ fun ConnectionsScreen(
         ConnectionEditDialog(
             existing = profile,
             discoveredDestinations = discoveredDestinations,
+            discoveredHosts = discoveredHosts,
             onDismiss = { editingProfile = null },
             onSave = { updated ->
                 viewModel.saveConnection(updated)

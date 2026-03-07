@@ -168,6 +168,9 @@ class ConnectionsViewModel @Inject constructor(
     private val _discoveredDestinations = MutableStateFlow<List<DiscoveredDestination>>(emptyList())
     val discoveredDestinations: StateFlow<List<DiscoveredDestination>> = _discoveredDestinations.asStateFlow()
 
+    private val networkDiscovery = NetworkDiscovery(appContext)
+    val discoveredHosts: StateFlow<List<DiscoveredHost>> = networkDiscovery.hosts
+
     private var periodicRefreshJob: Job? = null
 
     fun startPeriodicRefresh() {
@@ -183,6 +186,17 @@ class ConnectionsViewModel @Inject constructor(
     fun stopPeriodicRefresh() {
         periodicRefreshJob?.cancel()
         periodicRefreshJob = null
+    }
+
+    fun startNetworkDiscovery() {
+        networkDiscovery.start()
+        viewModelScope.launch {
+            networkDiscovery.scanSubnet()
+        }
+    }
+
+    fun stopNetworkDiscovery() {
+        networkDiscovery.stop()
     }
 
     fun refreshDiscoveredDestinations() {
