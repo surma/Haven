@@ -268,13 +268,16 @@ fun SettingsScreen(
     }
 
     if (showSessionManagerDialog) {
+        val sessionCmdOverride by viewModel.sessionCommandOverride.collectAsState()
         SessionManagerDialog(
             current = sessionManager,
+            commandOverride = sessionCmdOverride,
             onDismiss = { showSessionManagerDialog = false },
             onSelect = { selected ->
                 viewModel.setSessionManager(selected)
                 showSessionManagerDialog = false
             },
+            onCommandOverrideChange = viewModel::setSessionCommandOverride,
         )
     }
 
@@ -551,10 +554,13 @@ private fun ColorSchemeDialog(
 @Composable
 private fun SessionManagerDialog(
     current: UserPreferencesRepository.SessionManager,
+    commandOverride: String?,
     onDismiss: () -> Unit,
     onSelect: (UserPreferencesRepository.SessionManager) -> Unit,
+    onCommandOverrideChange: (String?) -> Unit,
 ) {
     val context = LocalContext.current
+    var overrideText by remember(commandOverride) { mutableStateOf(commandOverride ?: "") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Session persistence") },
@@ -592,11 +598,36 @@ private fun SessionManagerDialog(
                         },
                     )
                 }
+
+                if (current != UserPreferencesRepository.SessionManager.NONE) {
+                    Spacer(Modifier.height(12.dp))
+                    val defaultCommand = current.command?.invoke("{name}") ?: ""
+                    OutlinedTextField(
+                        value = overrideText,
+                        onValueChange = { overrideText = it },
+                        label = { Text("Custom command") },
+                        placeholder = { Text(defaultCommand, maxLines = 1) },
+                        supportingText = {
+                            Text("Use {name} for session name. Leave blank for default.")
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (overrideText != (commandOverride ?: "")) {
+                        TextButton(
+                            onClick = {
+                                onCommandOverrideChange(overrideText.ifBlank { null })
+                            },
+                        ) {
+                            Text("Save command")
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Close")
             }
         },
     )

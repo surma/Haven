@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -56,6 +58,7 @@ fun ConnectionEditDialog(
     var username by remember { mutableStateOf(existing?.username ?: "") }
     var destinationHash by remember { mutableStateOf(existing?.destinationHash ?: "") }
     var jumpProfileId by remember { mutableStateOf(existing?.jumpProfileId) }
+    var sshOptions by remember { mutableStateOf(existing?.sshOptions ?: "") }
     var localSideband by remember {
         mutableStateOf(
             existing == null ||
@@ -73,7 +76,7 @@ fun ConnectionEditDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // Type selector
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -242,6 +245,19 @@ fun ConnectionEditDialog(
                             }
                         }
                     }
+
+                    // SSH options
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = sshOptions,
+                        onValueChange = { sshOptions = it },
+                        label = { Text("SSH Options") },
+                        placeholder = { Text("ServerAliveInterval 60\nServerAliveCountMax 3") },
+                        supportingText = { Text("ssh_config format: Key Value (one per line)") },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 } else {
                     // Discovered destinations — filter by typed prefix, cap at 8
                     val filtered = remember(discoveredDestinations, destinationHash) {
@@ -352,6 +368,7 @@ fun ConnectionEditDialog(
                             connectionType = "SSH",
                             destinationHash = null,
                             jumpProfileId = jumpProfileId,
+                            sshOptions = sshOptions.ifBlank { null },
                         )
                     } else {
                         val savedHost = if (localSideband) "127.0.0.1" else rnsHost

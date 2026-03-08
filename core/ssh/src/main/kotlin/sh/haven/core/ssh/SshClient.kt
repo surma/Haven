@@ -74,6 +74,9 @@ class SshClient : Closeable {
             }
         }
 
+        // Apply user SSH options (overrides defaults above)
+        config.sshOptions.forEach { (key, value) -> sess.setConfig(key, value) }
+
         sess.connect(connectTimeoutMs)
         session = sess
         extractHostKey(sess, config.host, config.port)
@@ -174,6 +177,8 @@ class SshClient : Closeable {
                 )
             }
         }
+
+        config.sshOptions.forEach { (key, value) -> sess.setConfig(key, value) }
 
         sess.connect(connectTimeoutMs)
         session = sess

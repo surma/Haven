@@ -100,6 +100,15 @@ class SettingsViewModel @Inject constructor(
                 UserPreferencesRepository.SessionManager.NONE,
             )
 
+    val sessionCommandOverride: StateFlow<String?> = preferencesRepository.sessionCommandOverride
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun setSessionCommandOverride(command: String?) {
+        viewModelScope.launch {
+            preferencesRepository.setSessionCommandOverride(command)
+        }
+    }
+
     val terminalColorScheme: StateFlow<UserPreferencesRepository.TerminalColorScheme> =
         preferencesRepository.terminalColorScheme
             .stateIn(

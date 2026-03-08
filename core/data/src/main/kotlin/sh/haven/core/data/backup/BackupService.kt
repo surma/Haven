@@ -57,6 +57,7 @@ class BackupService @Inject constructor(
                 put("reticulumHost", p.reticulumHost)
                 put("reticulumPort", p.reticulumPort)
                 put("jumpProfileId", p.jumpProfileId ?: JSONObject.NULL)
+                put("sshOptions", p.sshOptions ?: JSONObject.NULL)
             })
         }
         json.put("connections", connections)
@@ -184,6 +185,7 @@ class BackupService @Inject constructor(
                             reticulumHost = c.optString("reticulumHost", "127.0.0.1"),
                             reticulumPort = c.optInt("reticulumPort", 37428),
                             jumpProfileId = c.optStringOrNull("jumpProfileId"),
+                            sshOptions = c.optStringOrNull("sshOptions"),
                         ),
                     )
                     count++

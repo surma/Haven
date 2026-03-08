@@ -48,6 +48,7 @@ class SshSessionManager @Inject constructor(
         val sftpChannel: ChannelSftp? = null,
         val connectionConfig: ConnectionConfig? = null,
         val sessionManager: SessionManager = SessionManager.NONE,
+        val sessionCommandOverride: String? = null,
         val chosenSessionName: String? = null,
         val activeForwards: List<PortForwardInfo> = emptyList(),
         /** Session ID of the jump host session, if this connection goes through one. */
@@ -91,10 +92,19 @@ class SshSessionManager @Inject constructor(
         return sessionId
     }
 
-    fun storeConnectionConfig(sessionId: String, config: ConnectionConfig, sessionMgr: SessionManager) {
+    fun storeConnectionConfig(
+        sessionId: String,
+        config: ConnectionConfig,
+        sessionMgr: SessionManager,
+        sessionCommandOverride: String? = null,
+    ) {
         _sessions.update { map ->
             val existing = map[sessionId] ?: return@update map
-            map + (sessionId to existing.copy(connectionConfig = config, sessionManager = sessionMgr))
+            map + (sessionId to existing.copy(
+                connectionConfig = config,
+                sessionManager = sessionMgr,
+                sessionCommandOverride = sessionCommandOverride,
+            ))
         }
     }
 
@@ -471,6 +481,11 @@ class SshSessionManager @Inject constructor(
         val session = _sessions.value[sessionId]
         val sessionName = session?.chosenSessionName
             ?: "haven-${session?.profileId?.take(8) ?: sessionId.take(8)}"
+        // User override replaces the built-in command template
+        val override = session?.sessionCommandOverride
+        if (!override.isNullOrBlank()) {
+            return override.replace("{name}", sessionName)
+        }
         return commandTemplate(sessionName)
     }
 

@@ -318,6 +318,7 @@ class ConnectionsViewModel @Inject constructor(
                         port = profile.port,
                         username = profile.username,
                         authMethod = authMethod,
+                        sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
                     )
 
                     // Create proxy through jump host if applicable
@@ -353,7 +354,8 @@ class ConnectionsViewModel @Inject constructor(
 
                     val prefSessionMgr = preferencesRepository.sessionManager.first()
                     val sshSessionMgr = prefSessionMgr.toSshSessionManager()
-                    sshSessionManager.storeConnectionConfig(sessionId, config, sshSessionMgr)
+                    val cmdOverride = preferencesRepository.sessionCommandOverride.first()
+                    sshSessionManager.storeConnectionConfig(sessionId, config, sshSessionMgr, cmdOverride)
                     sshSessionMgr
                 }
 
@@ -572,6 +574,7 @@ class ConnectionsViewModel @Inject constructor(
                 port = jumpProfile.port,
                 username = jumpProfile.username,
                 authMethod = authMethod,
+                sshOptions = ConnectionConfig.parseSshOptions(jumpProfile.sshOptions),
             )
             val hostKeyEntry = jumpClient.connect(config)
 
@@ -718,9 +721,10 @@ class ConnectionsViewModel @Inject constructor(
                 // Set up session manager preference
                 val prefSessionMgr = preferencesRepository.sessionManager.first()
                 val sshSessionMgr = prefSessionMgr.toSshSessionManager()
+                val cmdOverride = preferencesRepository.sessionCommandOverride.first()
                 val config = session.connectionConfig
                 if (config != null) {
-                    sshSessionManager.storeConnectionConfig(session.sessionId, config, sshSessionMgr)
+                    sshSessionManager.storeConnectionConfig(session.sessionId, config, sshSessionMgr, cmdOverride)
                 }
 
                 // Check for existing tmux/screen sessions

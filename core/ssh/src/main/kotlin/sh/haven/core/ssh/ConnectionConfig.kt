@@ -5,6 +5,7 @@ data class ConnectionConfig(
     val port: Int = 22,
     val username: String,
     val authMethod: AuthMethod = AuthMethod.Password(""),
+    val sshOptions: Map<String, String> = emptyMap(),
 ) {
     init {
         require(host.isNotBlank()) { "Host must not be blank" }
@@ -25,6 +26,26 @@ data class ConnectionConfig(
     }
 
     companion object {
+        /**
+         * Parse ssh_config-style option lines ("Key Value" or "Key=Value")
+         * into a map. Lines starting with # are comments.
+         */
+        fun parseSshOptions(text: String?): Map<String, String> {
+            if (text.isNullOrBlank()) return emptyMap()
+            return text.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.startsWith("#") }
+                .mapNotNull { line ->
+                    val sep = line.indexOfFirst { it == ' ' || it == '=' }
+                    if (sep > 0) {
+                        val key = line.substring(0, sep).trim()
+                        val value = line.substring(sep + 1).trim()
+                        if (key.isNotEmpty() && value.isNotEmpty()) key to value else null
+                    } else null
+                }
+                .toMap()
+        }
+
         private val QUICK_CONNECT_REGEX = Regex(
             """^(?:([^@]+)@)?([^:]+)(?::(\d+))?$"""
         )

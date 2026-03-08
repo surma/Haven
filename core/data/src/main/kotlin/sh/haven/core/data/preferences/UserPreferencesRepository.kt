@@ -27,6 +27,7 @@ class UserPreferencesRepository @Inject constructor(
     private val toolbarRow1Key = stringPreferencesKey("toolbar_row1") // legacy
     private val toolbarRow2Key = stringPreferencesKey("toolbar_row2") // legacy
     private val toolbarLayoutKey = stringPreferencesKey("toolbar_layout")
+    private val sessionCommandOverrideKey = stringPreferencesKey("session_command_override")
 
     val biometricEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[biometricEnabledKey] ?: false
@@ -141,6 +142,24 @@ class UserPreferencesRepository @Inject constructor(
             prefs.remove(toolbarRow1Key)
             prefs.remove(toolbarRow2Key)
             prefs.remove(toolbarRowsKey)
+        }
+    }
+
+    /**
+     * User override for the session manager command template.
+     * If non-null, replaces the built-in command. Use {name} for session name.
+     */
+    val sessionCommandOverride: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[sessionCommandOverrideKey]
+    }
+
+    suspend fun setSessionCommandOverride(command: String?) {
+        dataStore.edit { prefs ->
+            if (command.isNullOrBlank()) {
+                prefs.remove(sessionCommandOverrideKey)
+            } else {
+                prefs[sessionCommandOverrideKey] = command
+            }
         }
     }
 
