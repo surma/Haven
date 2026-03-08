@@ -19,10 +19,6 @@
 
 ## Near-term
 
-- [ ] **SFTP integration with CWD** — Use OSC 7 working directory to open SFTP browser at the current remote path.
-
-## Medium-term
-
 - [ ] **Agent forwarding** — SSH agent forwarding for key-based authentication to hop hosts. Note: ProxyJump already solves multi-hop more securely (keys never leave the device). Agent forwarding is mainly useful for workflows like `git push` from a remote server using your local key.
 - [ ] **Snippet/command library** — Save and recall frequently used commands.
 - [ ] **Connection groups/folders** — Organize saved connections by project or environment.
@@ -30,4 +26,11 @@
 ## Longer-term
 
 - [ ] **Mosh support** — UDP-based mobile shell for unreliable network connections.
-- [ ] **Remote desktop** — Desktop sharing via X11 forwarding, VNC tunneling, or RDP. NoMachine/NX protocol would be ideal for mobile (adaptive compression, low bandwidth) but licensing needs investigation.
+
+## Haven 2.0 — Remote Desktop
+
+Integrated graphical remote access over SSH, with no additional software required on the client side.
+
+- [ ] **VNC viewer** — Embedded VNC client that connects through Haven's existing SSH port forwarding. Fork [vernacular-vnc](https://github.com/shinyhut/vernacular-vnc) (MIT, pure Java), replace AWT rendering with Android Bitmap/Canvas, render in Compose. User sets up a local forward to the remote VNC server and the viewer connects to localhost.
+- [ ] **X11 forwarding** — Lightweight X11 server using [android-xserver](https://github.com/nwrkbiz/android-xserver) (MIT, pure Java, embeddable library). JSch already supports X11 channel forwarding. Suitable for individual X11 applications (xterm, plotting tools, simple GUIs) rather than full desktops.
+- [ ] **RDP** — Windows remote desktop via [FreeRDP](https://github.com/FreeRDP/FreeRDP) (Apache 2.0). NDK/JNI integration, higher build complexity. Tunnelled over SSH for security.

@@ -35,6 +35,12 @@
 
 ---
 
+## Philosophy
+
+Haven is a **transparent terminal**. It never silently injects commands or modifies your shell environment. Session manager auto-attach (tmux, screen, etc.) is the one exception — it's off by default, user-configured, and runs visibly in the terminal. Your remote session belongs to you — Haven just provides the window.
+
+---
+
 ## Features
 
 **Terminal** — VT100/xterm emulator with multi-tab sessions, tmux/zellij/screen auto-attach, mouse mode for TUI apps, keyboard toolbar (Esc, Tab, Ctrl, Alt, arrows), text selection with copy and Open URL, configurable font size, and six color schemes.
