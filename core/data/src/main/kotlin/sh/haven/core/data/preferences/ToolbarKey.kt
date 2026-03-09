@@ -12,6 +12,7 @@ enum class ToolbarKey(val id: String, val label: String, val isModifier: Boolean
     SHIFT("shift", "Shift", isModifier = true),
     CTRL("ctrl", "Ctrl", isModifier = true),
     ALT("alt", "Alt", isModifier = true),
+    ALTGR("altgr", "AltGr", isModifier = true),
     ARROW_LEFT("arrow_left", "Left", isAction = true),
     ARROW_UP("arrow_up", "Up", isAction = true),
     ARROW_DOWN("arrow_down", "Down", isAction = true),

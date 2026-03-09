@@ -2,6 +2,9 @@ package sh.haven.feature.terminal
 
 import android.app.Activity
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -28,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +48,7 @@ import androidx.core.view.WindowInsetsCompat
 import org.connectbot.terminal.SelectionController
 import sh.haven.core.data.preferences.ToolbarItem
 import sh.haven.core.data.preferences.ToolbarKey
+import kotlinx.coroutines.delay
 import sh.haven.core.data.preferences.ToolbarLayout
 
 // VT100/xterm escape sequences for special keys
@@ -470,6 +475,18 @@ private fun BuiltInKey(
         ToolbarKey.SHIFT -> ToolbarToggleButton("Shift", shiftActive, onClick = onToggleShift)
         ToolbarKey.CTRL -> ToolbarToggleButton("Ctrl", ctrlActive, onClick = onToggleCtrl)
         ToolbarKey.ALT -> ToolbarToggleButton("Alt", altActive, onClick = onToggleAlt)
+        ToolbarKey.ALTGR -> {
+            val altGrActive = ctrlActive && altActive
+            ToolbarToggleButton("AltGr", altGrActive) {
+                if (altGrActive) {
+                    onToggleCtrl()
+                    onToggleAlt()
+                } else {
+                    if (!ctrlActive) onToggleCtrl()
+                    if (!altActive) onToggleAlt()
+                }
+            }
+        }
         // Nav keys in BuiltInKey (used by flat ToolbarRow / selection mode row 1)
         ToolbarKey.ARROW_LEFT -> ToolbarArrowButton("\u2190") { onSendBytes(KEY_LEFT) }
         ToolbarKey.ARROW_UP -> ToolbarArrowButton("\u2191") { onSendBytes(KEY_UP) }
@@ -525,7 +542,7 @@ private fun NavCell(content: @Composable () -> Unit) {
 @Composable
 private fun NavArrowButton(label: String, onClick: () -> Unit) {
     NavCell {
-        FilledTonalButton(
+        RepeatingButton(
             onClick = onClick,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
@@ -543,7 +560,7 @@ private fun NavArrowButton(label: String, onClick: () -> Unit) {
 @Composable
 private fun NavTextButton(label: String, onClick: () -> Unit) {
     NavCell {
-        FilledTonalButton(
+        RepeatingButton(
             onClick = onClick,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
@@ -553,16 +570,74 @@ private fun NavTextButton(label: String, onClick: () -> Unit) {
     }
 }
 
+// --- Key repeat ---
+
+private const val REPEAT_DELAY_MS = 400L
+private const val REPEAT_INTERVAL_MS = 80L
+
+/**
+ * FilledTonalButton with key repeat. Uses Android MotionEvent interop to detect
+ * press/release, bypassing Compose's gesture system (which the horizontalScroll
+ * parent intercepts). Consumes touch events and handles both tap and repeat.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun RepeatingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+    content: @Composable () -> Unit,
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    var didRepeat by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            didRepeat = false
+            delay(REPEAT_DELAY_MS)
+            didRepeat = true
+            while (true) {
+                onClick()
+                delay(REPEAT_INTERVAL_MS)
+            }
+        }
+    }
+
+    FilledTonalButton(
+        onClick = {}, // handled by pointerInteropFilter
+        modifier = modifier.pointerInteropFilter { motionEvent ->
+            when (motionEvent.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    isPressed = true
+                    true // consume to receive UP
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (!didRepeat) onClick() // single tap
+                    isPressed = false
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    isPressed = false
+                    true
+                }
+                else -> false
+            }
+        },
+        contentPadding = contentPadding,
+    ) {
+        content()
+    }
+}
+
 // --- Standard buttons (variable width) ---
 
 @Composable
 private fun ToolbarArrowButton(label: String, onClick: () -> Unit) {
-    FilledTonalButton(
+    RepeatingButton(
         onClick = onClick,
         modifier = Modifier
             .padding(horizontal = 1.dp)
             .height(32.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
     ) {
         Text(
             label,
@@ -575,12 +650,11 @@ private fun ToolbarArrowButton(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun ToolbarTextButton(label: String, onClick: () -> Unit) {
-    FilledTonalButton(
+    RepeatingButton(
         onClick = onClick,
         modifier = Modifier
             .padding(horizontal = 1.dp)
             .height(32.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
     ) {
         Text(label, fontSize = 11.sp, lineHeight = 11.sp)
     }
@@ -609,7 +683,7 @@ private fun ToolbarToggleButton(label: String, active: Boolean, onClick: () -> U
 
 @Composable
 private fun SymbolButton(label: String, onClick: () -> Unit) {
-    FilledTonalButton(
+    RepeatingButton(
         onClick = onClick,
         modifier = Modifier
             .padding(horizontal = 1.dp)

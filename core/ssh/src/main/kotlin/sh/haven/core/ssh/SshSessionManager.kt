@@ -480,7 +480,7 @@ class SshSessionManager @Inject constructor(
         val commandTemplate = manager.command ?: return null
         val session = _sessions.value[sessionId]
         val sessionName = session?.chosenSessionName
-            ?: "haven-${session?.profileId?.take(8) ?: sessionId.take(8)}"
+            ?: "haven-${session?.label ?: sessionId.take(8)}"
         // User override replaces the built-in command template
         val override = session?.sessionCommandOverride
         if (!override.isNullOrBlank()) {

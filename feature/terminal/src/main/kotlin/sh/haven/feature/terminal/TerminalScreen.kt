@@ -6,17 +6,23 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DesktopWindows
@@ -30,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -64,6 +71,18 @@ import org.connectbot.terminal.ModifierManager
 import org.connectbot.terminal.Terminal
 import sh.haven.core.data.preferences.ToolbarLayout
 import sh.haven.core.data.preferences.UserPreferencesRepository
+
+/** Distinct colors for grouping tabs by connection profile. */
+private val TAB_GROUP_COLORS = listOf(
+    Color(0xFF42A5F5), // blue
+    Color(0xFF66BB6A), // green
+    Color(0xFFFF7043), // orange
+    Color(0xFFAB47BC), // purple
+    Color(0xFFFFCA28), // amber
+    Color(0xFF26C6DA), // cyan
+    Color(0xFFEF5350), // red
+    Color(0xFF8D6E63), // brown
+)
 
 @Composable
 fun TerminalScreen(
@@ -163,18 +182,66 @@ fun TerminalScreen(
             )
         } else {
             // Tab row — always show when tabs exist so "+" button is accessible
+            val profileColors = remember(tabs) {
+                tabs.map { it.profileId }.distinct()
+                    .withIndex().associate { (i, id) ->
+                        id to TAB_GROUP_COLORS[i % TAB_GROUP_COLORS.size]
+                    }
+            }
+            val clampedIndex = activeTabIndex.coerceIn(0, tabs.size - 1)
+            val indicatorColor = profileColors[tabs.getOrNull(clampedIndex)?.profileId]
+
             PrimaryScrollableTabRow(
-                selectedTabIndex = activeTabIndex.coerceIn(0, tabs.size - 1),
+                selectedTabIndex = clampedIndex,
                 modifier = Modifier.fillMaxWidth(),
                 edgePadding = 8.dp,
+                indicator = {
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(clampedIndex),
+                        color = indicatorColor ?: MaterialTheme.colorScheme.primary,
+                    )
+                },
             ) {
+
                 tabs.forEachIndexed { index, tab ->
+                    val reconnecting by tab.isReconnecting.collectAsState()
                     Tab(
                         selected = activeTabIndex == index,
                         onClick = { viewModel.selectTab(index) },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                profileColors[tab.profileId]?.let { color ->
+                                    Box(
+                                        modifier = Modifier
+                                            .width(4.dp)
+                                            .height(16.dp)
+                                            .background(color, CircleShape),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                                if (reconnecting) {
+                                    Icon(
+                                        Icons.Filled.Autorenew,
+                                        contentDescription = "Reconnecting",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                                 Text(tab.label, maxLines = 1)
+                                if (activeTabIndex == index) {
+                                    Spacer(Modifier.width(8.dp))
+                                    IconButton(
+                                        onClick = { viewModel.addTab() },
+                                        enabled = !newTabLoading,
+                                        modifier = Modifier.size(20.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Add,
+                                            contentDescription = "Clone tab",
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                    }
+                                }
                                 IconButton(
                                     onClick = { viewModel.closeTab(tab.sessionId) },
                                     modifier = Modifier.size(20.dp),
@@ -189,19 +256,6 @@ fun TerminalScreen(
                         },
                     )
                 }
-                // "+" tab for adding new tab
-                Tab(
-                    selected = false,
-                    onClick = { viewModel.addTab() },
-                    enabled = !newTabLoading,
-                    text = {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = "New tab",
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
-                )
             }
 
             // Terminal area

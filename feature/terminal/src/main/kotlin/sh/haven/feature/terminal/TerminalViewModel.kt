@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -143,6 +144,7 @@ data class TerminalTab(
     val oscHandler: OscHandler,
     val cwd: StateFlow<String?>,
     val hyperlinkUri: StateFlow<String?>,
+    val isReconnecting: StateFlow<Boolean>,
     val sendInput: (ByteArray) -> Unit,
     val resize: (Int, Int) -> Unit,
     val close: () -> Unit,
@@ -329,7 +331,7 @@ class TerminalViewModel @Inject constructor(
             if (!sessionManager.isReadyForTerminal(sessionId)) continue
 
             val session = sshSessions[sessionId] ?: continue
-            val baseLabel = session.chosenSessionName ?: session.label
+            val baseLabel = session.label
             val tabLabel = generateTabLabel(baseLabel, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
@@ -368,9 +370,14 @@ class TerminalViewModel @Inject constructor(
 
             termSession.start()
 
+            val sshSessionId = session.sessionId
+            val reconnectingFlow = sessionManager.sessions
+                .map { it[sshSessionId]?.status == SessionState.Status.RECONNECTING }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
             currentTabs.add(
                 TerminalTab(
-                    sessionId = session.sessionId,
+                    sessionId = sshSessionId,
                     profileId = session.profileId,
                     label = tabLabel,
                     transportType = "SSH",
@@ -380,6 +387,7 @@ class TerminalViewModel @Inject constructor(
                     oscHandler = oscHandler,
                     cwd = cwdFlow,
                     hyperlinkUri = hyperlinkFlow,
+                    isReconnecting = reconnectingFlow,
                     sendInput = { data -> termSession.sendToSsh(data) },
                     resize = { cols, rows -> termSession.resize(cols, rows) },
                     close = { termSession.close() },
@@ -444,6 +452,7 @@ class TerminalViewModel @Inject constructor(
                     oscHandler = rnsOscHandler,
                     cwd = rnsCwdFlow,
                     hyperlinkUri = rnsHyperlinkFlow,
+                    isReconnecting = MutableStateFlow(false),
                     sendInput = { data -> rnsSession.sendInput(data) },
                     resize = { cols, rows -> rnsSession.resize(cols, rows) },
                     close = { rnsSession.close() },

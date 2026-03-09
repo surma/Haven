@@ -75,9 +75,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -1025,10 +1027,62 @@ private fun VncRenderItem(
 }
 
 /** Nav block button with fixed cell width for VNC toolbar. */
+private const val VNC_REPEAT_DELAY_MS = 400L
+private const val VNC_REPEAT_INTERVAL_MS = 80L
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun VncRepeatingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+    content: @Composable () -> Unit,
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    var didRepeat by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            didRepeat = false
+            delay(VNC_REPEAT_DELAY_MS)
+            didRepeat = true
+            while (true) {
+                onClick()
+                delay(VNC_REPEAT_INTERVAL_MS)
+            }
+        }
+    }
+
+    FilledTonalButton(
+        onClick = {}, // handled by pointerInteropFilter
+        modifier = modifier.pointerInteropFilter { motionEvent ->
+            when (motionEvent.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    isPressed = true
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (!didRepeat) onClick()
+                    isPressed = false
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    isPressed = false
+                    true
+                }
+                else -> false
+            }
+        },
+        contentPadding = contentPadding,
+    ) {
+        content()
+    }
+}
+
 @Composable
 private fun VncNavButton(key: ToolbarKey, keySym: Int?, onClick: () -> Unit) {
     val isArrow = key in setOf(ToolbarKey.ARROW_UP, ToolbarKey.ARROW_DOWN, ToolbarKey.ARROW_LEFT, ToolbarKey.ARROW_RIGHT)
-    FilledTonalButton(
+    VncRepeatingButton(
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 1.dp).width(VNC_NAV_CELL_WIDTH).height(32.dp),
         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
@@ -1071,6 +1125,18 @@ private fun VncBuiltInKey(
         }
         ToolbarKey.CTRL -> VncToggleButton("Ctrl", ctrlActive, onToggleCtrl)
         ToolbarKey.ALT -> VncToggleButton("Alt", altActive, onToggleAlt)
+        ToolbarKey.ALTGR -> {
+            val altGrActive = ctrlActive && altActive
+            VncToggleButton("AltGr", altGrActive) {
+                if (altGrActive) {
+                    onToggleCtrl()
+                    onToggleAlt()
+                } else {
+                    if (!ctrlActive) onToggleCtrl()
+                    if (!altActive) onToggleAlt()
+                }
+            }
+        }
         ToolbarKey.SHIFT -> VncToggleButton("Shift", shiftActive, onToggleShift)
         ToolbarKey.ARROW_LEFT -> VncArrowButton("\u2190") { onVncKey(XK_LEFT) }
         ToolbarKey.ARROW_UP -> VncArrowButton("\u2191") { onVncKey(XK_UP) }
@@ -1087,10 +1153,9 @@ private fun VncBuiltInKey(
 
 @Composable
 private fun VncTextButton(label: String, onClick: () -> Unit) {
-    FilledTonalButton(
+    VncRepeatingButton(
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 1.dp).height(32.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
     ) {
         Text(label, fontSize = 11.sp, lineHeight = 11.sp)
     }
@@ -1098,10 +1163,9 @@ private fun VncTextButton(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun VncArrowButton(label: String, onClick: () -> Unit) {
-    FilledTonalButton(
+    VncRepeatingButton(
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 1.dp).height(32.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
     ) {
         Text(label, fontSize = 16.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
     }
@@ -1128,7 +1192,7 @@ private fun VncToggleButton(label: String, active: Boolean, onClick: () -> Unit)
 
 @Composable
 private fun VncSymbolButton(label: String, onClick: () -> Unit) {
-    FilledTonalButton(
+    VncRepeatingButton(
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 1.dp).height(30.dp),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
