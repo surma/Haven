@@ -1,6 +1,6 @@
-Haven is an open-source SSH and SFTP client for Android.
+Haven is an open-source SSH, VNC, and SFTP client for Android.
 
-Connect to your servers with a full terminal emulator, browse and transfer files over SFTP, and manage your SSH keys — all from your phone.
+Connect to your servers with a full terminal emulator, view remote desktops over VNC, browse and transfer files over SFTP, and manage your SSH keys — all from your phone.
 
 Terminal:
 - Full VT100/xterm terminal emulator with Unicode support (Hack font)
@@ -12,6 +12,13 @@ Terminal:
 - 6 color schemes: Haven, Classic Green, Light, Solarized Dark, Dracula, Monokai
 - Configurable font size (8–32 sp)
 
+VNC Remote Desktop:
+- VNC desktop viewer with pinch-to-zoom and pan
+- SSH tunnel support for encrypted VNC connections
+- Fullscreen mode with immersive display
+- Keyboard toolbar with modifier keys and symbols for remote desktop use
+- Touch-to-click with drag gesture support
+
 OSC escape sequence support:
 - OSC 52: remote clipboard set
 - OSC 8: hyperlinks
@@ -20,7 +27,10 @@ OSC escape sequence support:
 
 Networking:
 - SSH with auto-reconnect and exponential backoff
+- SSH port forwarding (local and remote)
+- ProxyJump multi-hop tunneling with connection tree view
 - Reticulum support via rnsh (Sideband or direct TCP gateway) with announce-based discovery
+- Network discovery for SSH hosts on local network
 - Trust-on-first-use host key verification with fingerprint display
 
 File transfer:
@@ -29,6 +39,7 @@ File transfer:
 
 Security:
 - SSH key generation (Ed25519, RSA, ECDSA) with encrypted storage
+- Encrypted backup and restore for keys, connections, and settings
 - Biometric app lock (fingerprint or face)
 - No ads, no tracking, no data collection
 - All data stays on your device
