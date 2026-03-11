@@ -328,7 +328,16 @@ class ConnectionsViewModel @Inject constructor(
                     )
 
                     // Create proxy through jump host if applicable
-                    val proxy = jumpSessionId?.let { sshSessionManager.createProxyJump(it) }
+                    val proxy = jumpSessionId?.let { jid ->
+                        val p = sshSessionManager.createProxyJump(jid)
+                        if (p == null) {
+                            Log.w(TAG, "createProxyJump returned null for jump session $jid")
+                        } else {
+                            Log.d(TAG, "ProxyJump created via jump session $jid")
+                        }
+                        p
+                    }
+                    Log.d(TAG, "Connecting to ${config.host}:${config.port} (proxy=${proxy != null})")
                     val hostKeyEntry = client.connect(config, proxy = proxy)
 
                     // TOFU host key verification
@@ -393,13 +402,24 @@ class ConnectionsViewModel @Inject constructor(
                 // No existing sessions or no session manager — proceed directly
                 finishConnect(sessionId, profile.id)
             } catch (e: Exception) {
+                Log.e(TAG, "connectSsh failed for ${profile.label}: ${e.message}", e)
                 sshSessionManager.updateStatus(sessionId, SshSessionManager.SessionState.Status.ERROR)
                 sshSessionManager.removeSession(sessionId)
-                if (keyOnly) {
-                    // Key auth failed — fall back to password dialog
+                val msg = e.message ?: ""
+                val isAuthError = keyOnly && (
+                    msg.contains("Auth fail", ignoreCase = true) ||
+                    msg.contains("Auth cancel", ignoreCase = true) ||
+                    msg.contains("authentication", ignoreCase = true) ||
+                    msg.contains("publickey", ignoreCase = true)
+                )
+                if (isAuthError) {
+                    Log.d(TAG, "Auth failed, showing password fallback for ${profile.label}")
+                    _passwordFallback.value = profile
+                } else if (keyOnly && msg.isBlank()) {
+                    // Unknown error with key auth — try password
                     _passwordFallback.value = profile
                 } else {
-                    _error.value = e.message ?: "Connection failed"
+                    _error.value = msg.ifBlank { "Connection failed" }
                 }
             } finally {
                 _connectingProfileId.value = null
@@ -831,6 +851,18 @@ class ConnectionsViewModel @Inject constructor(
     fun disconnect(profileId: String) {
         sshSessionManager.removeAllSessionsForProfile(profileId)
         reticulumSessionManager.removeAllSessionsForProfile(profileId)
+        updateServiceNotification()
+    }
+
+    private fun updateServiceNotification() {
+        if (sshSessionManager.hasActiveSessions || reticulumSessionManager.activeSessions.isNotEmpty()) {
+            // Re-start the service to refresh the notification count
+            startForegroundServiceIfNeeded()
+        } else {
+            // No more sessions — stop the foreground service
+            val intent = Intent(appContext, SshConnectionService::class.java)
+            appContext.stopService(intent)
+        }
     }
 
     fun dismissError() {
