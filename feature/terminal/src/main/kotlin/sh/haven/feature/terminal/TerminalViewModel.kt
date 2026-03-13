@@ -367,6 +367,13 @@ class TerminalViewModel @Inject constructor(
                 onKeyboardInput = { data -> coalescer.send(applyModifiers(data)) },
                 onResize = { dims ->
                     Log.d(TAG, "SSH onResize: ${dims.columns}x${dims.rows}")
+                    // Resize ALL tabs — only the active tab's Terminal composable
+                    // fires onResize, so inactive tabs would keep stale PTY sizes
+                    // unless we propagate here.
+                    for (tab in _tabs.value) {
+                        tab.resize(dims.columns, dims.rows)
+                    }
+                    // Also resize the just-created session (not yet in _tabs)
                     termSession.resize(dims.columns, dims.rows)
                 },
             )
@@ -437,6 +444,9 @@ class TerminalViewModel @Inject constructor(
                 onKeyboardInput = { data -> rnsCoalescer.send(applyModifiers(data)) },
                 onResize = { dims ->
                     Log.d(TAG, "RNS onResize: ${dims.columns}x${dims.rows}")
+                    for (tab in _tabs.value) {
+                        tab.resize(dims.columns, dims.rows)
+                    }
                     rnsSession.resize(dims.columns, dims.rows)
                 },
             )
