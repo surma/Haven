@@ -10,9 +10,16 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        maven { url = uri("${rootProject.projectDir}/local-repo") }
         google()
         mavenCentral()
+    }
+}
+
+// Build termlib from source (submodule fork with popScrollbackLine fix).
+// Drop this includeBuild once the fix is merged upstream and released.
+includeBuild("termlib") {
+    dependencySubstitution {
+        substitute(module("org.connectbot:termlib")).using(project(":lib"))
     }
 }
 
