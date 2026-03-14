@@ -133,6 +133,7 @@ fun SettingsScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("Settings") })
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
         if (viewModel.biometricAvailable) {
             SettingsToggleItem(
@@ -224,7 +225,8 @@ fun SettingsScreen(
             },
         )
 
-    }
+    } // scrollable Column
+    } // outer Column
 
     if (showAboutDialog) {
         AboutDialog(
@@ -565,7 +567,7 @@ private fun SessionManagerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Session persistence") },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 UserPreferencesRepository.SessionManager.entries.forEach { manager ->
                     ListItem(
                         headlineContent = {

@@ -49,7 +49,10 @@ fun BiometricLockScreen(
         when (val result = authenticator.authenticate(activity)) {
             is BiometricAuthenticator.AuthResult.Success -> onUnlocked()
             is BiometricAuthenticator.AuthResult.Failure -> errorMessage = result.message
-            is BiometricAuthenticator.AuthResult.Cancelled -> errorMessage = "Authentication cancelled"
+            is BiometricAuthenticator.AuthResult.Cancelled -> {
+                // User cancelled — send them back to the home screen
+                (activity as? android.app.Activity)?.moveTaskToBack(true)
+            }
         }
     }
 
