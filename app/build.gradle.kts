@@ -15,13 +15,13 @@ android {
         applicationId = "sh.haven.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 61
-        versionName = "2.0.16"
+        versionCode = 62
+        versionName = "2.0.17"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    flavorDimensions += "abi"
+    flavorDimensions += listOf("abi", "distribution")
     productFlavors {
         create("arm64") {
             dimension = "abi"
@@ -30,6 +30,14 @@ android {
         create("x64") {
             dimension = "abi"
             ndk { abiFilters += "x86_64" }
+        }
+        create("full") {
+            dimension = "distribution"
+            buildConfigField("boolean", "MOSH_ENABLED", "true")
+        }
+        create("foss") {
+            dimension = "distribution"
+            buildConfigField("boolean", "MOSH_ENABLED", "false")
         }
     }
 
@@ -58,17 +66,26 @@ android {
         }
     }
 
-    val abiCodes = mapOf("arm64" to 1, "x64" to 2)
+    // Version code scheme: base * 10 + offset
+    // full:  arm64=1, x64=2
+    // foss:  arm64=3, x64=4
+    val variantCodes = mapOf(
+        "arm64Full" to 1, "x64Full" to 2,
+        "arm64Foss" to 3, "x64Foss" to 4,
+    )
 
     applicationVariants.all {
         val variant = this
-        val abiCode = abiCodes[variant.flavorName]
+        val code = variantCodes[variant.flavorName]
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            if (abiCode != null) {
-                output.versionCodeOverride = (defaultConfig.versionCode ?: 0) * 10 + abiCode
+            if (code != null) {
+                output.versionCodeOverride = (defaultConfig.versionCode ?: 0) * 10 + code
             }
-            output.outputFileName = "haven-${variant.versionName}-${variant.flavorName}-${variant.buildType.name}.apk"
+            // e.g., haven-2.0.16-arm64-full-release.apk
+            val abi = variant.productFlavors.first { it.dimension == "abi" }.name
+            val dist = variant.productFlavors.first { it.dimension == "distribution" }.name
+            output.outputFileName = "haven-${variant.versionName}-$abi-$dist-${variant.buildType.name}.apk"
         }
     }
 
@@ -80,6 +97,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -92,6 +110,14 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+    }
+}
+
+// Exclude prebuilt mosh binary from foss variants
+androidComponents {
+    onVariants(selector().withFlavor("distribution" to "foss")) { variant ->
+        variant.packaging.jniLibs.excludes.add("**/libmoshclient.so")
+        variant.packaging.resources.excludes.add("**/terminfo/**")
     }
 }
 

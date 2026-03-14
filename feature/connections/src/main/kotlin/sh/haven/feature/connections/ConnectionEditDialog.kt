@@ -54,6 +54,7 @@ fun ConnectionEditDialog(
     sshProfiles: List<ConnectionProfile> = emptyList(),
     globalSessionManagerLabel: String = "None",
     subnetScanning: Boolean = false,
+    moshEnabled: Boolean = true,
     onScanSubnet: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (ConnectionProfile) -> Unit,
@@ -384,21 +385,23 @@ fun ConnectionEditDialog(
                         }
                     }
 
-                    // Mosh toggle
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Use Mosh", modifier = Modifier.weight(1f))
-                        Switch(checked = useMosh, onCheckedChange = { useMosh = it })
-                    }
-                    if (useMosh) {
-                        Text(
-                            "Requires mosh-server on remote host",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    // Mosh toggle (hidden when mosh binary not included)
+                    if (moshEnabled) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Use Mosh", modifier = Modifier.weight(1f))
+                            Switch(checked = useMosh, onCheckedChange = { useMosh = it })
+                        }
+                        if (useMosh) {
+                            Text(
+                                "Requires mosh-server on remote host",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
 
                     // SSH options

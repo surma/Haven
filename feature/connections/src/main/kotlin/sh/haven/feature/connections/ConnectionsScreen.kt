@@ -94,6 +94,7 @@ private val PROFILE_COLORS = listOf(
 fun ConnectionsScreen(
     onNavigateToTerminal: (profileId: String) -> Unit = {},
     onNavigateToNewSession: (profileId: String) -> Unit = {},
+    moshEnabled: Boolean = true,
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val connections by viewModel.connections.collectAsState()
@@ -205,6 +206,7 @@ fun ConnectionsScreen(
             sshProfiles = connections,
             globalSessionManagerLabel = globalSessionManagerLabel,
             subnetScanning = subnetScanning,
+            moshEnabled = moshEnabled,
             onScanSubnet = { viewModel.scanSubnet() },
             onDismiss = { showAddDialog = false },
             onSave = { profile ->
@@ -261,6 +263,7 @@ fun ConnectionsScreen(
             sshProfiles = connections,
             globalSessionManagerLabel = globalSessionManagerLabel,
             subnetScanning = subnetScanning,
+            moshEnabled = moshEnabled,
             onScanSubnet = { viewModel.scanSubnet() },
             onDismiss = { editingProfile = null },
             onSave = { updated ->
