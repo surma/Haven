@@ -807,13 +807,16 @@ class TerminalViewModel @Inject constructor(
     }
 
     fun onNewTabSessionSelected(sessionId: String, sessionName: String?) {
+        val remoteNames = _newTabSessionPicker.value?.sessionNames ?: emptyList()
         _newTabSessionPicker.value = null
         viewModelScope.launch {
             _newTabLoading.value = true
             try {
-                if (sessionName != null) {
-                    sessionManager.setChosenSessionName(sessionId, sessionName)
-                }
+                val effectiveName = sessionName ?: generateUniqueSessionName(
+                    sessionManager.getSession(sessionId)?.label ?: sessionId.take(8),
+                    remoteNames,
+                )
+                sessionManager.setChosenSessionName(sessionId, effectiveName)
                 finishNewSshTab(sessionId)
             } catch (e: Exception) {
                 Log.e(TAG, "onNewTabSessionSelected failed", e)
@@ -822,6 +825,15 @@ class TerminalViewModel @Inject constructor(
                 _newTabLoading.value = false
             }
         }
+    }
+
+    private fun generateUniqueSessionName(label: String, remoteNames: List<String>): String {
+        val base = label.replace(Regex("[^A-Za-z0-9._-]"), "-")
+        val existing = remoteNames.toSet()
+        if (base !in existing) return base
+        var i = 2
+        while ("$base-$i" in existing) i++
+        return "$base-$i"
     }
 
     fun killRemoteSession(sessionName: String) {

@@ -697,9 +697,11 @@ class ConnectionsViewModel @Inject constructor(
         viewModelScope.launch {
             _connectingProfileId.value = profileId
             try {
-                if (sessionName != null) {
-                    sshSessionManager.setChosenSessionName(sessionId, sessionName)
-                }
+                val effectiveName = sessionName ?: generateUniqueSessionName(
+                    sshSessionManager.getSession(sessionId)?.label ?: sessionId.take(8),
+                    sel?.sessionNames ?: emptyList(),
+                )
+                sshSessionManager.setChosenSessionName(sessionId, effectiveName)
                 finishConnect(sessionId, profileId)
             } catch (e: Exception) {
                 sshSessionManager.updateStatus(sessionId, SshSessionManager.SessionState.Status.ERROR)
@@ -788,6 +790,19 @@ class ConnectionsViewModel @Inject constructor(
                 _error.value = "Failed to rename session: ${e.message}"
             }
         }
+    }
+
+    /**
+     * Generate a session name that doesn't conflict with existing remote sessions.
+     * Appends "-2", "-3", etc. if the base name is already taken.
+     */
+    private fun generateUniqueSessionName(label: String, remoteNames: List<String>): String {
+        val base = label.replace(Regex("[^A-Za-z0-9._-]"), "-")
+        val existing = remoteNames.toSet()
+        if (base !in existing) return base
+        var i = 2
+        while ("$base-$i" in existing) i++
+        return "$base-$i"
     }
 
     fun dismissSessionPicker() {
@@ -931,8 +946,8 @@ class ConnectionsViewModel @Inject constructor(
             val rawName = chosenSessionName
                 ?: moshSessionManager.sessions.value[sessionId]?.label
                 ?: sessionId.take(8)
-            val sessionName = rawName.replace(Regex("[^A-Za-z0-9._-]"), "-")
-            moshSessionManager.setInitialCommand(sessionId, smCmd(sessionName))
+            val sanitized = rawName.replace(Regex("[^A-Za-z0-9._-]"), "-")
+            moshSessionManager.setInitialCommand(sessionId, smCmd(sanitized))
         }
 
         withContext(Dispatchers.IO) {
