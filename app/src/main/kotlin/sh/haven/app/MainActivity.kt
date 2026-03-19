@@ -72,14 +72,23 @@ class MainActivity : AppCompatActivity() {
             HavenTheme(darkTheme = darkTheme) {
                 val biometricEnabled by preferencesRepository.biometricEnabled
                     .collectAsState(initial = false)
+                val lockTimeout by preferencesRepository.lockTimeout
+                    .collectAsState(initial = sh.haven.core.data.preferences.UserPreferencesRepository.LockTimeout.IMMEDIATE)
                 var unlocked by remember { mutableStateOf(false) }
+                var backgroundedAt by remember { mutableStateOf(0L) }
 
-                // Re-lock when app goes to background (ON_STOP)
+                // Re-lock when app goes to background, respecting timeout
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_STOP) {
-                            unlocked = false
+                            backgroundedAt = System.currentTimeMillis()
+                        }
+                        if (event == Lifecycle.Event.ON_START && unlocked && backgroundedAt > 0) {
+                            val elapsed = (System.currentTimeMillis() - backgroundedAt) / 1000
+                            if (elapsed >= lockTimeout.seconds) {
+                                unlocked = false
+                            }
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)

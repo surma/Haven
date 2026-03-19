@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardAlt
 import androidx.compose.material.icons.filled.Palette
@@ -80,6 +81,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val biometricEnabled by viewModel.biometricEnabled.collectAsState()
+    val lockTimeout by viewModel.lockTimeout.collectAsState()
     val fontSize by viewModel.terminalFontSize.collectAsState()
     val theme by viewModel.theme.collectAsState()
     val sessionManager by viewModel.sessionManager.collectAsState()
@@ -94,6 +96,7 @@ fun SettingsScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showToolbarConfigDialog by remember { mutableStateOf(false) }
     var showBackupPasswordDialog by remember { mutableStateOf<BackupAction?>(null) }
+    var showLockTimeoutDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -143,6 +146,14 @@ fun SettingsScreen(
                 checked = biometricEnabled,
                 onCheckedChange = viewModel::setBiometricEnabled,
             )
+            if (biometricEnabled) {
+                SettingsItem(
+                    icon = Icons.Filled.Timer,
+                    title = "Lock timeout",
+                    subtitle = lockTimeout.label,
+                    onClick = { showLockTimeoutDialog = true },
+                )
+            }
         }
         SettingsItem(
             icon = Icons.Filled.Terminal,
@@ -265,6 +276,38 @@ fun SettingsScreen(
             onSelect = { selected ->
                 viewModel.setTerminalColorScheme(selected)
                 showColorSchemeDialog = false
+            },
+        )
+    }
+
+    if (showLockTimeoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLockTimeoutDialog = false },
+            title = { Text("Lock timeout") },
+            text = {
+                Column {
+                    UserPreferencesRepository.LockTimeout.entries.forEach { timeout ->
+                        ListItem(
+                            modifier = Modifier.clickable {
+                                viewModel.setLockTimeout(timeout)
+                                showLockTimeoutDialog = false
+                            },
+                            headlineContent = { Text(timeout.label) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = lockTimeout == timeout,
+                                    onClick = null,
+                                )
+                            },
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showLockTimeoutDialog = false }) {
+                    Text("Cancel")
+                }
             },
         )
     }

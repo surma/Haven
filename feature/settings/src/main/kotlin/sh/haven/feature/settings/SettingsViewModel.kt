@@ -100,6 +100,18 @@ class SettingsViewModel @Inject constructor(
                 UserPreferencesRepository.SessionManager.NONE,
             )
 
+    val lockTimeout: StateFlow<UserPreferencesRepository.LockTimeout> =
+        preferencesRepository.lockTimeout
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                UserPreferencesRepository.LockTimeout.IMMEDIATE,
+            )
+
+    fun setLockTimeout(timeout: UserPreferencesRepository.LockTimeout) {
+        viewModelScope.launch { preferencesRepository.setLockTimeout(timeout) }
+    }
+
     val sessionCommandOverride: StateFlow<String?> = preferencesRepository.sessionCommandOverride
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 

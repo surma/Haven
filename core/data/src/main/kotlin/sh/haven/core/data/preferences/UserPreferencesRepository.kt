@@ -29,6 +29,7 @@ class UserPreferencesRepository @Inject constructor(
     private val toolbarLayoutKey = stringPreferencesKey("toolbar_layout")
     private val sessionCommandOverrideKey = stringPreferencesKey("session_command_override")
     private val sftpSortModeKey = stringPreferencesKey("sftp_sort_mode")
+    private val lockTimeoutKey = stringPreferencesKey("lock_timeout")
 
     val biometricEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[biometricEnabledKey] ?: false
@@ -199,6 +200,29 @@ class UserPreferencesRepository @Inject constructor(
         companion object {
             fun fromString(value: String?): TerminalColorScheme =
                 entries.find { it.name == value } ?: HAVEN
+        }
+    }
+
+    val lockTimeout: Flow<LockTimeout> = dataStore.data.map { prefs ->
+        LockTimeout.fromString(prefs[lockTimeoutKey])
+    }
+
+    suspend fun setLockTimeout(timeout: LockTimeout) {
+        dataStore.edit { prefs ->
+            prefs[lockTimeoutKey] = timeout.name
+        }
+    }
+
+    enum class LockTimeout(val label: String, val seconds: Long) {
+        IMMEDIATE("Immediately", 0),
+        THIRTY_SECONDS("30 seconds", 30),
+        ONE_MINUTE("1 minute", 60),
+        FIVE_MINUTES("5 minutes", 300),
+        NEVER("Never", Long.MAX_VALUE);
+
+        companion object {
+            fun fromString(value: String?): LockTimeout =
+                entries.find { it.name == value } ?: IMMEDIATE
         }
     }
 
