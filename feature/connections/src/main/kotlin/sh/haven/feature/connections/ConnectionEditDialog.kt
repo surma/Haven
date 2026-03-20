@@ -51,11 +51,14 @@ fun ConnectionEditDialog(
     existing: ConnectionProfile? = null,
     discoveredDestinations: List<ConnectionsViewModel.DiscoveredDestination> = emptyList(),
     discoveredHosts: List<DiscoveredHost> = emptyList(),
+    discoveredSmbHosts: List<DiscoveredHost> = emptyList(),
     sshProfiles: List<ConnectionProfile> = emptyList(),
     sshKeys: List<sh.haven.core.data.db.entities.SshKey> = emptyList(),
     globalSessionManagerLabel: String = "None",
     subnetScanning: Boolean = false,
+    smbSubnetScanning: Boolean = false,
     onScanSubnet: () -> Unit = {},
+    onScanSubnetSmb: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (ConnectionProfile) -> Unit,
 ) {
@@ -63,6 +66,7 @@ fun ConnectionEditDialog(
     val initialTransport = when {
         existing?.isVnc == true -> "VNC"
         existing?.isRdp == true -> "RDP"
+        existing?.isSmb == true -> "SMB"
         existing?.isEternalTerminal == true -> "ET"
         existing?.isMosh == true -> "MOSH"
         existing?.isReticulum == true -> "RETICULUM"
@@ -74,6 +78,7 @@ fun ConnectionEditDialog(
         "RETICULUM" -> "RETICULUM"
         "VNC" -> "VNC"
         "RDP" -> "RDP"
+        "SMB" -> "SMB"
         else -> "SSH"
     }
     var label by rememberSaveable { mutableStateOf(existing?.label ?: "") }
@@ -83,6 +88,7 @@ fun ConnectionEditDialog(
             when {
                 existing?.isVnc == true -> (existing.vncPort ?: 5900).toString()
                 existing?.isRdp == true -> existing.rdpPort.toString()
+                existing?.isSmb == true -> existing.smbPort.toString()
                 else -> existing?.port?.toString() ?: "22"
             }
         )
@@ -93,6 +99,11 @@ fun ConnectionEditDialog(
     var rdpDomain by rememberSaveable { mutableStateOf(existing?.rdpDomain ?: "") }
     var rdpSshForward by rememberSaveable { mutableStateOf(existing?.rdpSshForward ?: false) }
     var rdpSshProfileId by rememberSaveable { mutableStateOf(existing?.rdpSshProfileId) }
+    var smbShare by rememberSaveable { mutableStateOf(existing?.smbShare ?: "") }
+    var smbPassword by rememberSaveable { mutableStateOf(existing?.smbPassword ?: "") }
+    var smbDomain by rememberSaveable { mutableStateOf(existing?.smbDomain ?: "") }
+    var smbSshForward by rememberSaveable { mutableStateOf(existing?.smbSshForward ?: false) }
+    var smbSshProfileId by rememberSaveable { mutableStateOf(existing?.smbSshProfileId) }
     var vncPassword by rememberSaveable { mutableStateOf(existing?.vncPassword ?: "") }
     var destinationHash by rememberSaveable { mutableStateOf(existing?.destinationHash ?: "") }
     var jumpProfileId by rememberSaveable { mutableStateOf(existing?.jumpProfileId) }
@@ -125,6 +136,7 @@ fun ConnectionEditDialog(
                     "ET" to "Eternal Terminal",
                     "VNC" to "VNC (Desktop)",
                     "RDP" to "RDP (Desktop)",
+                    "SMB" to "SMB (File Share)",
                     "RETICULUM" to "Reticulum",
                 )
                 var transportExpanded by remember { mutableStateOf(false) }
@@ -156,10 +168,11 @@ fun ConnectionEditDialog(
                                     val defaultPort = when (value) {
                                         "VNC" -> "5900"
                                         "RDP" -> "3389"
+                                        "SMB" -> "445"
                                         "ET" -> "22"
                                         else -> "22"
                                     }
-                                    if (port == "22" || port == "5900" || port == "3389" || port == "2022") {
+                                    if (port == "22" || port == "5900" || port == "3389" || port == "445" || port == "2022") {
                                         port = defaultPort
                                     }
                                 },
@@ -178,6 +191,7 @@ fun ConnectionEditDialog(
                             when (connectionType) {
                                 "VNC" -> "My VNC Desktop"
                                 "RDP" -> "My RDP Desktop"
+                                "SMB" -> "My File Share"
                                 "RETICULUM" -> "My Node"
                                 else -> "My Server"
                             }
@@ -314,6 +328,245 @@ fun ConnectionEditDialog(
                                             text = { Text(candidate.label) },
                                             onClick = {
                                                 rdpSshProfileId = candidate.id
+                                                sshExpanded = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Text(
+                                "Add an SSH connection first",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                } else if (connectionType == "SMB") {
+                    // SMB: host (with discovery), share, username, port, password, domain, SSH tunnel
+                    val filteredSmbHosts = remember(discoveredSmbHosts, host) {
+                        val prefix = host.lowercase()
+                        discoveredSmbHosts
+                            .filter {
+                                prefix.isEmpty() ||
+                                    it.address.startsWith(prefix) ||
+                                    it.hostname?.lowercase()?.contains(prefix) == true
+                            }
+                            .take(8)
+                    }
+
+                    // Scan network button
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (filteredSmbHosts.isNotEmpty()) {
+                            Text(
+                                "Discovered (${filteredSmbHosts.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+                        TextButton(
+                            onClick = onScanSubnetSmb,
+                            enabled = !smbSubnetScanning,
+                        ) {
+                            if (smbSubnetScanning) {
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Scanning", style = MaterialTheme.typography.labelSmall)
+                            } else {
+                                Icon(Icons.Filled.Radar, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Scan Network", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+
+                    var smbHostExpanded by remember { mutableStateOf(false) }
+                    if (discoveredSmbHosts.size > 3) {
+                        ExposedDropdownMenuBox(
+                            expanded = smbHostExpanded,
+                            onExpandedChange = { smbHostExpanded = it },
+                        ) {
+                            OutlinedTextField(
+                                value = host,
+                                onValueChange = {
+                                    host = it
+                                    smbHostExpanded = true
+                                },
+                                label = { Text("Host") },
+                                placeholder = { Text("192.168.1.100") },
+                                singleLine = true,
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = smbHostExpanded)
+                                },
+                                supportingText = if (filteredSmbHosts.isNotEmpty()) {{
+                                    Text("${filteredSmbHosts.size} hosts discovered")
+                                }} else null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryEditable),
+                            )
+                            if (filteredSmbHosts.isNotEmpty()) {
+                                ExposedDropdownMenu(
+                                    expanded = smbHostExpanded,
+                                    onDismissRequest = { smbHostExpanded = false },
+                                ) {
+                                    filteredSmbHosts.forEach { disc ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(disc.hostname ?: disc.address)
+                                                    if (disc.hostname != null) {
+                                                        Text(
+                                                            disc.address,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                host = disc.address
+                                                if (label.isBlank() && disc.hostname != null) {
+                                                    label = disc.hostname
+                                                }
+                                                smbHostExpanded = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        if (filteredSmbHosts.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                filteredSmbHosts.forEach { disc ->
+                                    val chipLabel = disc.hostname ?: disc.address
+                                    SuggestionChip(
+                                        onClick = {
+                                            host = disc.address
+                                            if (label.isBlank() && disc.hostname != null) {
+                                                label = disc.hostname
+                                            }
+                                        },
+                                        label = {
+                                            Text(
+                                                text = chipLabel,
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        OutlinedTextField(
+                            value = host,
+                            onValueChange = { host = it },
+                            label = { Text("Host") },
+                            placeholder = { Text("192.168.1.100") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = smbShare,
+                        onValueChange = { smbShare = it },
+                        label = { Text("Share Name") },
+                        placeholder = { Text("shared") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            label = { Text("Username") },
+                            placeholder = { Text("user") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = port,
+                            onValueChange = { port = it.filter { c -> c.isDigit() } },
+                            label = { Text("Port") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.width(80.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = smbPassword,
+                        onValueChange = { smbPassword = it },
+                        label = { Text("Password (optional)") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = smbDomain,
+                        onValueChange = { smbDomain = it },
+                        label = { Text("Domain (optional)") },
+                        placeholder = { Text("WORKGROUP") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FilterChip(
+                        selected = smbSshForward,
+                        onClick = {
+                            smbSshForward = !smbSshForward
+                            if (smbSshForward) {
+                                if (host.isBlank()) host = "localhost"
+                            } else {
+                                smbSshProfileId = null
+                                if (host == "localhost") host = ""
+                            }
+                        },
+                        label = { Text("SSH tunnel") },
+                    )
+                    if (smbSshForward) {
+                        val sshCandidates = sshProfiles.filter { it.isSsh }
+                        if (sshCandidates.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            var sshExpanded by remember { mutableStateOf(false) }
+                            val selectedSsh = sshCandidates.firstOrNull { it.id == smbSshProfileId }
+                            ExposedDropdownMenuBox(
+                                expanded = sshExpanded,
+                                onExpandedChange = { sshExpanded = it },
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedSsh?.label ?: "Select SSH connection",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("SSH connection") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sshExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = sshExpanded,
+                                    onDismissRequest = { sshExpanded = false },
+                                ) {
+                                    sshCandidates.forEach { candidate ->
+                                        DropdownMenuItem(
+                                            text = { Text(candidate.label) },
+                                            onClick = {
+                                                smbSshProfileId = candidate.id
                                                 sshExpanded = false
                                             },
                                         )
@@ -783,6 +1036,7 @@ fun ConnectionEditDialog(
                 "SSH" -> host.isNotBlank() && username.isNotBlank()
                 "VNC" -> host.isNotBlank()
                 "RDP" -> host.isNotBlank() && rdpUsername.isNotBlank() && (!rdpSshForward || rdpSshProfileId != null)
+                "SMB" -> host.isNotBlank() && smbShare.isNotBlank() && (!smbSshForward || smbSshProfileId != null)
                 else -> destinationHash.length == 32 && (localSideband || rnsHost.isNotBlank())
             }
             TextButton(
@@ -821,6 +1075,25 @@ fun ConnectionEditDialog(
                             rdpDomain = rdpDomain.ifBlank { null },
                             rdpSshForward = rdpSshForward,
                             rdpSshProfileId = if (rdpSshForward) rdpSshProfileId else null,
+                        )
+                    } else if (connectionType == "SMB") {
+                        val smbPortInt = port.toIntOrNull() ?: 445
+                        (existing ?: ConnectionProfile(
+                            label = label,
+                            host = host,
+                            username = username,
+                        )).copy(
+                            label = label.ifBlank { "SMB: \\\\$host\\$smbShare" },
+                            host = host,
+                            port = smbPortInt,
+                            username = username,
+                            connectionType = "SMB",
+                            smbPort = smbPortInt,
+                            smbShare = smbShare.ifBlank { null },
+                            smbPassword = smbPassword.ifBlank { null },
+                            smbDomain = smbDomain.ifBlank { null },
+                            smbSshForward = smbSshForward,
+                            smbSshProfileId = if (smbSshForward) smbSshProfileId else null,
                         )
                     } else if (connectionType == "SSH") {
                         val portInt = port.toIntOrNull() ?: 22

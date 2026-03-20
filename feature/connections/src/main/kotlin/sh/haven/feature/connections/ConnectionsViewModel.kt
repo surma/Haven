@@ -40,6 +40,7 @@ import sh.haven.core.mosh.MoshSessionManager
 import sh.haven.core.et.EtSessionManager
 import sh.haven.core.reticulum.ReticulumBridge
 import sh.haven.core.reticulum.ReticulumSessionManager
+import sh.haven.core.smb.SmbSessionManager
 import android.util.Log
 import java.io.File
 import java.util.Base64
@@ -60,6 +61,7 @@ class ConnectionsViewModel @Inject constructor(
     private val moshSessionManager: MoshSessionManager,
     private val etSessionManager: EtSessionManager,
     private val reticulumBridge: ReticulumBridge,
+    private val smbSessionManager: SmbSessionManager,
     private val sshKeyRepository: SshKeyRepository,
     private val preferencesRepository: UserPreferencesRepository,
     private val hostKeyVerifier: HostKeyVerifier,
@@ -80,11 +82,22 @@ class ConnectionsViewModel @Inject constructor(
     /** Derive profile-level statuses for the connections list UI (merges SSH + Reticulum + Mosh + ET). */
     val profileStatuses: StateFlow<Map<String, ProfileStatus>> =
         combine(
-            sshSessionManager.sessions,
-            reticulumSessionManager.sessions,
-            moshSessionManager.sessions,
-            etSessionManager.sessions,
-        ) { sshMap, rnsMap, moshMap, etMap ->
+            combine(
+                sshSessionManager.sessions,
+                reticulumSessionManager.sessions,
+                moshSessionManager.sessions,
+                etSessionManager.sessions,
+            ) { ssh, rns, mosh, et -> arrayOf(ssh, rns, mosh, et) },
+            smbSessionManager.sessions,
+        ) { base, smbMap ->
+            @Suppress("UNCHECKED_CAST")
+            val sshMap = base[0] as Map<String, SshSessionManager.SessionState>
+            @Suppress("UNCHECKED_CAST")
+            val rnsMap = base[1] as Map<String, ReticulumSessionManager.SessionState>
+            @Suppress("UNCHECKED_CAST")
+            val moshMap = base[2] as Map<String, MoshSessionManager.SessionState>
+            @Suppress("UNCHECKED_CAST")
+            val etMap = base[3] as Map<String, EtSessionManager.SessionState>
             val result = mutableMapOf<String, ProfileStatus>()
 
             // SSH statuses
@@ -141,6 +154,21 @@ class ConnectionsViewModel @Inject constructor(
                 val existing = result[profileId]
                 if (existing == null || etStatus.ordinal < existing.ordinal) {
                     result[profileId] = etStatus
+                }
+            }
+
+            // SMB statuses
+            smbMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
+                val statuses = states.map { it.status }
+                val smbStatus = when {
+                    SmbSessionManager.SessionState.Status.CONNECTED in statuses -> ProfileStatus.CONNECTED
+                    SmbSessionManager.SessionState.Status.CONNECTING in statuses -> ProfileStatus.CONNECTING
+                    SmbSessionManager.SessionState.Status.ERROR in statuses -> ProfileStatus.ERROR
+                    else -> ProfileStatus.DISCONNECTED
+                }
+                val existing = result[profileId]
+                if (existing == null || smbStatus.ordinal < existing.ordinal) {
+                    result[profileId] = smbStatus
                 }
             }
 
@@ -208,6 +236,10 @@ class ConnectionsViewModel @Inject constructor(
     private val _navigateToRdp = MutableStateFlow<RdpNavigation?>(null)
     val navigateToRdp: StateFlow<RdpNavigation?> = _navigateToRdp.asStateFlow()
 
+    /** Emitted to navigate to Files tab for an SMB connection. */
+    private val _navigateToSmb = MutableStateFlow<String?>(null)
+    val navigateToSmb: StateFlow<String?> = _navigateToSmb.asStateFlow()
+
     /** Emitted to open a new session (new tab) on an already-connected profile. */
     private val _newSessionProfileId = MutableStateFlow<String?>(null)
     val newSessionProfileId: StateFlow<String?> = _newSessionProfileId.asStateFlow()
@@ -238,6 +270,7 @@ class ConnectionsViewModel @Inject constructor(
         _navigateToTerminal.value = null
         _navigateToVnc.value = null
         _navigateToRdp.value = null
+        _navigateToSmb.value = null
         _newSessionProfileId.value = null
     }
 
@@ -253,6 +286,7 @@ class ConnectionsViewModel @Inject constructor(
 
     private val networkDiscovery = NetworkDiscovery(appContext)
     val discoveredHosts: StateFlow<List<DiscoveredHost>> = networkDiscovery.hosts
+    val discoveredSmbHosts: StateFlow<List<DiscoveredHost>> = networkDiscovery.smbHosts
     val localVmStatus: StateFlow<LocalVmStatus> = networkDiscovery.localVm
 
     private var periodicRefreshJob: Job? = null
@@ -287,6 +321,17 @@ class ConnectionsViewModel @Inject constructor(
             _subnetScanning.value = true
             networkDiscovery.scanSubnet()
             _subnetScanning.value = false
+        }
+    }
+
+    private val _smbSubnetScanning = MutableStateFlow(false)
+    val smbSubnetScanning: StateFlow<Boolean> = _smbSubnetScanning.asStateFlow()
+
+    fun scanSubnetSmb() {
+        viewModelScope.launch {
+            _smbSubnetScanning.value = true
+            networkDiscovery.scanSubnetSmb()
+            _smbSubnetScanning.value = false
         }
     }
 
@@ -362,6 +407,7 @@ class ConnectionsViewModel @Inject constructor(
             sshSessionManager.removeAllSessionsForProfile(id)
             reticulumSessionManager.removeAllSessionsForProfile(id)
             moshSessionManager.removeAllSessionsForProfile(id)
+            smbSessionManager.removeAllSessionsForProfile(id)
             repository.delete(id)
         }
     }
@@ -384,6 +430,10 @@ class ConnectionsViewModel @Inject constructor(
         }
         if (profile.isRdp) {
             connectRdp(profile, password)
+            return
+        }
+        if (profile.isSmb) {
+            connectSmb(profile, password)
             return
         }
         if (profile.isReticulum) {
@@ -440,6 +490,51 @@ class ConnectionsViewModel @Inject constructor(
                 }
             } else {
                 _navigateToRdp.value = RdpNavigation(host, port, username, rdpPassword, domain, profile.rdpSshForward, profile.rdpSshProfileId)
+            }
+        }
+    }
+
+    private fun connectSmb(profile: ConnectionProfile, password: String) {
+        val host = profile.host
+        val port = profile.smbPort
+        val shareName = profile.smbShare ?: return
+        val smbUsername = profile.username
+        val smbPassword = password.ifBlank { profile.smbPassword ?: "" }
+        val domain = profile.smbDomain ?: ""
+        viewModelScope.launch {
+            repository.markConnected(profile.id)
+            try {
+                _connectingProfileId.value = profile.id
+                val sshProfileId = profile.smbSshProfileId
+                var sshClientCloseable: java.io.Closeable? = null
+                var tunnelPort: Int? = null
+
+                if (profile.smbSshForward && sshProfileId != null) {
+                    val (sshSessionId, _) = connectJumpHost(sshProfileId, "")
+                    val sshClient = sshSessionManager.sessions.value[sshSessionId]?.client
+                        ?: throw IllegalStateException("SSH tunnel session not found")
+                    // Set up local port forward: random port -> remoteHost:smbPort
+                    tunnelPort = withContext(Dispatchers.IO) {
+                        sshClient.setPortForwardingL("127.0.0.1", 0, host, port)
+                    }
+                    sshClientCloseable = sshClient
+                    Log.d(TAG, "SMB SSH tunnel: 127.0.0.1:$tunnelPort -> $host:$port")
+                }
+
+                val sessionId = smbSessionManager.registerSession(profile.id, profile.label)
+                withContext(Dispatchers.IO) {
+                    smbSessionManager.connectSession(
+                        sessionId, host, port, shareName, smbUsername, smbPassword, domain,
+                        sshClient = sshClientCloseable,
+                        tunnelPort = tunnelPort,
+                    )
+                }
+                _navigateToSmb.value = profile.id
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to connect SMB", e)
+                _error.value = "SMB: ${e.message}"
+            } finally {
+                _connectingProfileId.value = null
             }
         }
     }

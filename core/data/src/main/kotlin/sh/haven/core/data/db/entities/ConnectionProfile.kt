@@ -36,6 +36,12 @@ data class ConnectionProfile(
     val rdpPassword: String? = null,
     val rdpSshForward: Boolean = false,
     val rdpSshProfileId: String? = null,
+    val smbPort: Int = 445,
+    val smbShare: String? = null,
+    val smbDomain: String? = null,
+    val smbPassword: String? = null,
+    val smbSshForward: Boolean = false,
+    val smbSshProfileId: String? = null,
 ) {
     enum class AuthType {
         PASSWORD,
@@ -48,6 +54,7 @@ data class ConnectionProfile(
     val isEternalTerminal: Boolean get() = isSsh && useEternalTerminal
     val isVnc: Boolean get() = connectionType == "VNC"
     val isRdp: Boolean get() = connectionType == "RDP"
+    val isSmb: Boolean get() = connectionType == "SMB"
     val isDesktop: Boolean get() = isVnc || isRdp
-    val isTerminal: Boolean get() = !isDesktop
+    val isTerminal: Boolean get() = !isDesktop && !isSmb
 }

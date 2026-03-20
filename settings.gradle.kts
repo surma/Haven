@@ -62,6 +62,7 @@ include(":core:mosh")
 include(":core:et")
 include(":core:vnc")
 include(":core:rdp")
+include(":core:smb")
 
 include(":feature:settings")
 include(":feature:vnc")

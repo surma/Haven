@@ -73,6 +73,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SftpScreen(
+    pendingSmbProfileId: String? = null,
     viewModel: SftpViewModel = hiltViewModel(),
 ) {
     val connectedProfiles by viewModel.connectedProfiles.collectAsState()
@@ -86,6 +87,10 @@ fun SftpScreen(
     val error by viewModel.error.collectAsState()
     val message by viewModel.message.collectAsState()
     val lastDownload by viewModel.lastDownload.collectAsState()
+
+    LaunchedEffect(pendingSmbProfileId) {
+        pendingSmbProfileId?.let { viewModel.setPendingSmbProfile(it) }
+    }
 
     viewModel.syncConnectedProfiles()
 

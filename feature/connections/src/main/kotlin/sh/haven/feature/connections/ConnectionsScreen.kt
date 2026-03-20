@@ -97,6 +97,7 @@ fun ConnectionsScreen(
     onNavigateToNewSession: (profileId: String) -> Unit = {},
     onNavigateToVnc: (host: String, port: Int, password: String?) -> Unit = { _, _, _ -> },
     onNavigateToRdp: (host: String, port: Int, username: String, password: String, domain: String, sshForward: Boolean, sshProfileId: String?, sshSessionId: String?) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onNavigateToSmb: (profileId: String) -> Unit = {},
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val connections by viewModel.connections.collectAsState()
@@ -124,6 +125,7 @@ fun ConnectionsScreen(
     val navigateToTerminal by viewModel.navigateToTerminal.collectAsState()
     val navigateToVnc by viewModel.navigateToVnc.collectAsState()
     val navigateToRdp by viewModel.navigateToRdp.collectAsState()
+    val navigateToSmb by viewModel.navigateToSmb.collectAsState()
     val deploySuccess by viewModel.deploySuccess.collectAsState()
     val sessionSelection by viewModel.sessionSelection.collectAsState()
     val passwordFallback by viewModel.passwordFallback.collectAsState()
@@ -131,6 +133,8 @@ fun ConnectionsScreen(
     val globalSessionManagerLabel by viewModel.globalSessionManagerLabel.collectAsState()
     val newSessionProfileId by viewModel.newSessionProfileId.collectAsState()
     val subnetScanning by viewModel.subnetScanning.collectAsState()
+    val discoveredSmbHosts by viewModel.discoveredSmbHosts.collectAsState()
+    val smbSubnetScanning by viewModel.smbSubnetScanning.collectAsState()
     val showMoshSetupGuide by viewModel.showMoshSetupGuide.collectAsState()
     val showMoshClientMissing by viewModel.showMoshClientMissing.collectAsState()
 
@@ -152,6 +156,13 @@ fun ConnectionsScreen(
     LaunchedEffect(navigateToRdp) {
         navigateToRdp?.let { nav ->
             onNavigateToRdp(nav.host, nav.port, nav.username, nav.password, nav.domain, nav.sshForward, nav.sshProfileId, nav.sshSessionId)
+            viewModel.onNavigated()
+        }
+    }
+
+    LaunchedEffect(navigateToSmb) {
+        navigateToSmb?.let { profileId ->
+            onNavigateToSmb(profileId)
             viewModel.onNavigated()
         }
     }
@@ -222,11 +233,14 @@ fun ConnectionsScreen(
         ConnectionEditDialog(
             discoveredDestinations = discoveredDestinations,
             discoveredHosts = discoveredHosts,
+            discoveredSmbHosts = discoveredSmbHosts,
             sshProfiles = connections,
             sshKeys = sshKeys,
             globalSessionManagerLabel = globalSessionManagerLabel,
             subnetScanning = subnetScanning,
+            smbSubnetScanning = smbSubnetScanning,
             onScanSubnet = { viewModel.scanSubnet() },
+            onScanSubnetSmb = { viewModel.scanSubnetSmb() },
             onDismiss = { showAddDialog = false },
             onSave = { profile ->
                 viewModel.saveConnection(profile)
@@ -279,11 +293,14 @@ fun ConnectionsScreen(
             existing = profile,
             discoveredDestinations = discoveredDestinations,
             discoveredHosts = discoveredHosts,
+            discoveredSmbHosts = discoveredSmbHosts,
             sshProfiles = connections,
             sshKeys = sshKeys,
             globalSessionManagerLabel = globalSessionManagerLabel,
             subnetScanning = subnetScanning,
+            smbSubnetScanning = smbSubnetScanning,
             onScanSubnet = { viewModel.scanSubnet() },
+            onScanSubnetSmb = { viewModel.scanSubnetSmb() },
             onDismiss = { editingProfileId = null },
             onSave = { updated ->
                 viewModel.saveConnection(updated)
@@ -613,6 +630,13 @@ private fun onTapProfile(
         viewModel.connect(profile, "")
     } else if (profile.isRdp) {
         val savedPassword = profile.rdpPassword
+        if (savedPassword != null) {
+            viewModel.connect(profile, savedPassword)
+        } else {
+            showPasswordDialog()
+        }
+    } else if (profile.isSmb) {
+        val savedPassword = profile.smbPassword
         if (savedPassword != null) {
             viewModel.connect(profile, savedPassword)
         } else {

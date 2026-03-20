@@ -18,6 +18,10 @@
 # Keep termlib classes — native JNI renderer accesses fields by name
 -keep class org.connectbot.terminal.** { *; }
 
+# Keep smbj (reflection-based protocol handling)
+-keep class com.hierynomus.** { *; }
+-keep class net.engio.** { *; }
+
 # Keep Hilt generated classes
 -keep class dagger.hilt.** { *; }
 -keep class javax.inject.** { *; }

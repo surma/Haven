@@ -64,6 +64,9 @@ fun HavenNavHost(
     var pendingVncSshForward by rememberSaveable { mutableStateOf(false) }
     var pendingVncSshSessionId by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // SMB auto-connect params
+    var pendingSmbProfileId by rememberSaveable { mutableStateOf<String?>(null) }
+
     // RDP auto-connect params
     var pendingRdpHost by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingRdpPort by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -145,6 +148,12 @@ fun HavenNavHost(
                             pagerState.animateScrollToPage(Screen.Desktop.ordinal)
                         }
                     },
+                    onNavigateToSmb = { profileId ->
+                        pendingSmbProfileId = profileId
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(Screen.Sftp.ordinal)
+                        }
+                    },
                 )
                 Screen.Terminal -> {
                     TerminalScreen(
@@ -219,7 +228,14 @@ fun HavenNavHost(
                         onFullscreenChanged = { desktopFullscreen = it },
                     )
                 }
-                Screen.Sftp -> SftpScreen()
+                Screen.Sftp -> {
+                    SftpScreen(pendingSmbProfileId = pendingSmbProfileId)
+                    LaunchedEffect(pendingSmbProfileId) {
+                        if (pendingSmbProfileId != null) {
+                            pendingSmbProfileId = null
+                        }
+                    }
+                }
                 Screen.Keys -> KeysScreen()
                 Screen.Settings -> SettingsScreen()
             }

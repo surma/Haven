@@ -8,6 +8,7 @@ datastore = "1.1.4"
 tink = "1.17.0"
 biometric = "1.2.0-alpha05"
 jsch = "0.2.21"
+smbj = "0.13.0"
 termlib = "0.0.22"
 bouncycastle = "1.79"
 jna = "5.14.0"
@@ -59,6 +60,9 @@ biometric = { group = "androidx.biometric", name = "biometric", version.ref = "b
 # SSH
 jsch = { group = "com.github.mwiede", name = "jsch", version.ref = "jsch" }
 bouncycastle = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+
+# SMB
+smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
 
 # Terminal
 termlib = { group = "org.connectbot", name = "termlib", version.ref = "termlib" }

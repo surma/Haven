@@ -21,6 +21,8 @@ import sh.haven.core.data.preferences.UserPreferencesRepository
 import sh.haven.core.data.repository.ConnectionRepository
 import sh.haven.core.et.EtSessionManager
 import sh.haven.core.mosh.MoshSessionManager
+import sh.haven.core.smb.SmbClient
+import sh.haven.core.smb.SmbSessionManager
 import sh.haven.core.ssh.SshClient
 import sh.haven.core.ssh.SshSessionManager
 import sh.haven.core.ssh.SshSessionManager.SessionState
@@ -57,6 +59,7 @@ class SftpViewModel @Inject constructor(
     private val sessionManager: SshSessionManager,
     private val moshSessionManager: MoshSessionManager,
     private val etSessionManager: EtSessionManager,
+    private val smbSessionManager: SmbSessionManager,
     private val repository: ConnectionRepository,
     private val preferencesRepository: UserPreferencesRepository,
     @ApplicationContext private val appContext: Context,
@@ -100,6 +103,13 @@ class SftpViewModel @Inject constructor(
     fun clearLastDownload() { _lastDownload.value = null }
 
     private var sftpChannel: ChannelSftp? = null
+    private var activeSmbClient: SmbClient? = null
+
+    /** Tracks which active profile is SMB (vs SFTP). */
+    private val _isSmbProfile = MutableStateFlow(false)
+
+    /** Pending SMB profile to auto-select when navigating to Files tab. */
+    private val _pendingSmbProfileId = MutableStateFlow<String?>(null)
 
     init {
         // Restore persisted sort mode
@@ -139,17 +149,32 @@ class SftpViewModel @Inject constructor(
                 .map { it.profileId }
                 .toSet()
 
-            val connectedProfileIds = sshProfileIds + moshProfileIds + etProfileIds
+            // Collect profile IDs from SMB sessions
+            val smbProfileIds = smbSessionManager.sessions.value.values
+                .filter { it.status == SmbSessionManager.SessionState.Status.CONNECTED }
+                .map { it.profileId }
+                .toSet()
+
+            val connectedProfileIds = sshProfileIds + moshProfileIds + etProfileIds + smbProfileIds
 
             if (connectedProfileIds.isEmpty()) {
                 _connectedProfiles.value = emptyList()
                 _activeProfileId.value = null
                 sftpChannel = null
+                activeSmbClient = null
                 return@launch
             }
 
             val profiles = withContext(Dispatchers.IO) { repository.getAll() }
             _connectedProfiles.value = profiles.filter { it.id in connectedProfileIds }
+
+            // Handle pending SMB navigation
+            val pendingSmb = _pendingSmbProfileId.value
+            if (pendingSmb != null && pendingSmb in connectedProfileIds) {
+                _pendingSmbProfileId.value = null
+                selectProfile(pendingSmb)
+                return@launch
+            }
 
             // Auto-select first connected profile if none selected
             if (_activeProfileId.value == null || _activeProfileId.value !in connectedProfileIds) {
@@ -158,20 +183,44 @@ class SftpViewModel @Inject constructor(
         }
     }
 
+    fun setPendingSmbProfile(profileId: String) {
+        _pendingSmbProfileId.value = profileId
+    }
+
     fun selectProfile(profileId: String) {
-        if (profileId == _activeProfileId.value && sftpChannel?.isConnected == true) return
-        _activeProfileId.value = profileId
-        sftpChannel = null
-        _currentPath.value = "/"
-        _allEntries.value = emptyList()
-        _entries.value = emptyList()
-        openSftpAndList(profileId, "/")
+        // Check if this is an SMB profile
+        val isSmb = smbSessionManager.isProfileConnected(profileId)
+        _isSmbProfile.value = isSmb
+
+        if (isSmb) {
+            if (profileId == _activeProfileId.value && activeSmbClient?.isConnected == true) return
+            _activeProfileId.value = profileId
+            sftpChannel = null
+            activeSmbClient = null
+            _currentPath.value = "/"
+            _allEntries.value = emptyList()
+            _entries.value = emptyList()
+            openSmbAndList(profileId)
+        } else {
+            if (profileId == _activeProfileId.value && sftpChannel?.isConnected == true) return
+            _activeProfileId.value = profileId
+            sftpChannel = null
+            activeSmbClient = null
+            _currentPath.value = "/"
+            _allEntries.value = emptyList()
+            _entries.value = emptyList()
+            openSftpAndList(profileId, "/")
+        }
     }
 
     fun navigateTo(path: String) {
         val profileId = _activeProfileId.value ?: return
         _currentPath.value = path
-        listDirectory(profileId, path)
+        if (_isSmbProfile.value) {
+            listSmbDirectory(path)
+        } else {
+            listDirectory(profileId, path)
+        }
     }
 
     fun navigateUp() {
@@ -203,7 +252,11 @@ class SftpViewModel @Inject constructor(
 
     fun refresh() {
         val profileId = _activeProfileId.value ?: return
-        listDirectory(profileId, _currentPath.value)
+        if (_isSmbProfile.value) {
+            listSmbDirectory(_currentPath.value)
+        } else {
+            listDirectory(profileId, _currentPath.value)
+        }
     }
 
     fun downloadFile(entry: SftpEntry, destinationUri: Uri) {
@@ -213,31 +266,38 @@ class SftpViewModel @Inject constructor(
                 _loading.value = true
                 _transferProgress.value = TransferProgress(entry.name, entry.size, 0)
                 withContext(Dispatchers.IO) {
-                    val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
                     val outputStream: OutputStream = appContext.contentResolver.openOutputStream(destinationUri)
                         ?: throw IllegalStateException("Cannot open output stream")
                     outputStream.use { out ->
-                        val monitor = object : SftpProgressMonitor {
-                            private var total = 0L
-                            private var transferred = 0L
-
-                            override fun init(op: Int, src: String, dest: String, max: Long) {
-                                total = if (max == SftpProgressMonitor.UNKNOWN_SIZE) entry.size else max
-                                transferred = 0
-                                _transferProgress.value = TransferProgress(entry.name, total, 0)
-                            }
-
-                            override fun count(bytes: Long): Boolean {
-                                transferred += bytes
+                        if (_isSmbProfile.value) {
+                            val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
+                            client.download(entry.path, out) { transferred, total ->
                                 _transferProgress.value = TransferProgress(entry.name, total, transferred)
-                                return true
                             }
+                        } else {
+                            val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
+                            val monitor = object : SftpProgressMonitor {
+                                private var total = 0L
+                                private var transferred = 0L
 
-                            override fun end() {
-                                _transferProgress.value = TransferProgress(entry.name, total, total)
+                                override fun init(op: Int, src: String, dest: String, max: Long) {
+                                    total = if (max == SftpProgressMonitor.UNKNOWN_SIZE) entry.size else max
+                                    transferred = 0
+                                    _transferProgress.value = TransferProgress(entry.name, total, 0)
+                                }
+
+                                override fun count(bytes: Long): Boolean {
+                                    transferred += bytes
+                                    _transferProgress.value = TransferProgress(entry.name, total, transferred)
+                                    return true
+                                }
+
+                                override fun end() {
+                                    _transferProgress.value = TransferProgress(entry.name, total, total)
+                                }
                             }
+                            channel.get(entry.path, out, monitor)
                         }
-                        channel.get(entry.path, out, monitor)
                     }
                 }
                 _lastDownload.value = DownloadResult(entry.name, destinationUri)
@@ -266,31 +326,38 @@ class SftpViewModel @Inject constructor(
                 } ?: -1L
                 _transferProgress.value = TransferProgress(fileName, fileSize, 0)
                 withContext(Dispatchers.IO) {
-                    val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
                     val inputStream = appContext.contentResolver.openInputStream(sourceUri)
                         ?: throw IllegalStateException("Cannot open input stream")
                     inputStream.use { input ->
-                        val monitor = object : SftpProgressMonitor {
-                            private var total = 0L
-                            private var transferred = 0L
-
-                            override fun init(op: Int, src: String, dest: String, max: Long) {
-                                total = if (max == SftpProgressMonitor.UNKNOWN_SIZE) fileSize else max
-                                transferred = 0
-                                _transferProgress.value = TransferProgress(fileName, total, 0)
-                            }
-
-                            override fun count(bytes: Long): Boolean {
-                                transferred += bytes
+                        if (_isSmbProfile.value) {
+                            val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
+                            client.upload(input, destPath, fileSize) { transferred, total ->
                                 _transferProgress.value = TransferProgress(fileName, total, transferred)
-                                return true
                             }
+                        } else {
+                            val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
+                            val monitor = object : SftpProgressMonitor {
+                                private var total = 0L
+                                private var transferred = 0L
 
-                            override fun end() {
-                                _transferProgress.value = TransferProgress(fileName, total, total)
+                                override fun init(op: Int, src: String, dest: String, max: Long) {
+                                    total = if (max == SftpProgressMonitor.UNKNOWN_SIZE) fileSize else max
+                                    transferred = 0
+                                    _transferProgress.value = TransferProgress(fileName, total, 0)
+                                }
+
+                                override fun count(bytes: Long): Boolean {
+                                    transferred += bytes
+                                    _transferProgress.value = TransferProgress(fileName, total, transferred)
+                                    return true
+                                }
+
+                                override fun end() {
+                                    _transferProgress.value = TransferProgress(fileName, total, total)
+                                }
                             }
+                            channel.put(input, destPath, monitor)
                         }
-                        channel.put(input, destPath, monitor)
                     }
                     Log.d(TAG, "Upload complete: '$destPath'")
                 }
@@ -312,11 +379,16 @@ class SftpViewModel @Inject constructor(
             try {
                 _loading.value = true
                 withContext(Dispatchers.IO) {
-                    val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
-                    if (entry.isDirectory) {
-                        channel.rmdir(entry.path)
+                    if (_isSmbProfile.value) {
+                        val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
+                        client.delete(entry.path, entry.isDirectory)
                     } else {
-                        channel.rm(entry.path)
+                        val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
+                        if (entry.isDirectory) {
+                            channel.rmdir(entry.path)
+                        } else {
+                            channel.rm(entry.path)
+                        }
                     }
                 }
                 _message.value = "Deleted ${entry.name}"
@@ -427,6 +499,59 @@ class SftpViewModel @Inject constructor(
             Log.e(TAG, "Failed to open SFTP channel via ET SSH client", e)
             null
         }
+    }
+
+    private fun openSmbAndList(profileId: String) {
+        viewModelScope.launch {
+            try {
+                _loading.value = true
+                withContext(Dispatchers.IO) {
+                    val client = smbSessionManager.getClientForProfile(profileId)
+                        ?: throw IllegalStateException("SMB session not connected")
+                    activeSmbClient = client
+                    _currentPath.value = "/"
+                    loadSmbEntries(client, "/")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "SMB open failed", e)
+                _error.value = "SMB failed: ${e.message}"
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    private fun listSmbDirectory(path: String) {
+        viewModelScope.launch {
+            try {
+                _loading.value = true
+                withContext(Dispatchers.IO) {
+                    val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
+                    loadSmbEntries(client, path)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "SMB list directory failed", e)
+                _error.value = "Failed to list: ${e.message}"
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    private fun loadSmbEntries(client: SmbClient, path: String) {
+        val smbEntries = client.listDirectory(path)
+        val results = smbEntries.map { entry ->
+            SftpEntry(
+                name = entry.name,
+                path = entry.path,
+                isDirectory = entry.isDirectory,
+                size = entry.size,
+                modifiedTime = entry.modifiedTime,
+                permissions = entry.permissions,
+            )
+        }
+        _allEntries.value = sortEntries(results, _sortMode.value)
+        applyFilter()
     }
 
     private fun sortEntries(entries: List<SftpEntry>, mode: SortMode): List<SftpEntry> {
