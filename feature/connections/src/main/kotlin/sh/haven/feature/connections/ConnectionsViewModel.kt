@@ -1300,10 +1300,11 @@ class ConnectionsViewModel @Inject constructor(
         // Profile has an explicit key assigned
         val keyId = profile.keyId
         if (keyId != null) {
+            val keyBytes = sshKeyRepository.getDecryptedKeyBytes(keyId)
             val key = sshKeyRepository.getById(keyId)
-            if (key != null) {
+            if (keyBytes != null && key != null) {
                 return ConnectionConfig.AuthMethod.PrivateKey(
-                    keyBytes = rawKeyToPem(key.privateKeyBytes, key.keyType),
+                    keyBytes = rawKeyToPem(keyBytes, key.keyType),
                     passphrase = password,
                 )
             }
@@ -1311,7 +1312,7 @@ class ConnectionsViewModel @Inject constructor(
 
         // No explicit key but keys are available — try all keys
         if (password.isEmpty()) {
-            val keys = sshKeyRepository.getAll()
+            val keys = sshKeyRepository.getAllDecrypted()
             if (keys.isNotEmpty()) {
                 return ConnectionConfig.AuthMethod.PrivateKeys(
                     keys = keys.map { key ->

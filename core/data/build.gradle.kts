@@ -32,6 +32,7 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.datastore.preferences)
     implementation(libs.coroutines.core)
+    implementation(project(":core:security"))
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
