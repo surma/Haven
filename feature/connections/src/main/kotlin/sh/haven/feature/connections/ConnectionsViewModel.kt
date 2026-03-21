@@ -425,7 +425,7 @@ class ConnectionsViewModel @Inject constructor(
         _passwordFallback.value = null
     }
 
-    fun connect(profile: ConnectionProfile, password: String, keyOnly: Boolean = false) {
+    fun connect(profile: ConnectionProfile, password: String, keyOnly: Boolean = false, rememberPassword: Boolean? = null) {
         if (profile.isVnc) {
             connectVnc(profile)
             return
@@ -450,7 +450,7 @@ class ConnectionsViewModel @Inject constructor(
             connectMosh(profile, password, keyOnly)
             return
         }
-        connectSsh(profile, password, keyOnly)
+        connectSsh(profile, password, keyOnly, rememberPassword)
     }
 
     private fun connectVnc(profile: ConnectionProfile) {
@@ -541,7 +541,7 @@ class ConnectionsViewModel @Inject constructor(
         }
     }
 
-    private fun connectSsh(profile: ConnectionProfile, password: String, keyOnly: Boolean) {
+    private fun connectSsh(profile: ConnectionProfile, password: String, keyOnly: Boolean, rememberPassword: Boolean? = null) {
         viewModelScope.launch {
             _connectingProfileId.value = profile.id
             _error.value = null
@@ -643,6 +643,13 @@ class ConnectionsViewModel @Inject constructor(
 
                 // No existing sessions or no session manager — proceed directly
                 finishConnect(sessionId, profile.id)
+
+                // Save or clear remembered password after successful connect
+                if (rememberPassword == true && password.isNotBlank()) {
+                    repository.save(profile.copy(sshPassword = password))
+                } else if (rememberPassword == false && profile.sshPassword != null) {
+                    repository.save(profile.copy(sshPassword = null))
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "connectSsh failed for ${profile.label}: ${e.message}", e)
                 sshSessionManager.updateStatus(sessionId, SshSessionManager.SessionState.Status.ERROR)
