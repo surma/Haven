@@ -3,6 +3,9 @@ package sh.haven.feature.keys
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.content.Context
+import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +17,7 @@ import kotlinx.coroutines.withContext
 import sh.haven.core.data.db.entities.SshKey
 import sh.haven.core.data.repository.SshKeyRepository
 import sh.haven.core.security.SshKeyGenerator
+import sh.haven.core.ssh.SshKeyExporter
 import sh.haven.core.ssh.SshKeyImporter
 import javax.inject.Inject
 
@@ -27,6 +31,10 @@ class KeysViewModel @Inject constructor(
 
     private val _generating = MutableStateFlow(false)
     val generating: StateFlow<Boolean> = _generating.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun dismissMessage() { _message.value = null }
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -144,6 +152,47 @@ class KeysViewModel @Inject constructor(
         _importResult.value = null
         _needsPassphrase.value = false
         pendingImportBytes = null
+    }
+
+    /** Key ID pending export — UI launches SAF file picker when set. */
+    private val _pendingExportKeyId = MutableStateFlow<String?>(null)
+    val pendingExportKeyId: StateFlow<String?> = _pendingExportKeyId.asStateFlow()
+
+    fun requestExport(keyId: String) {
+        _pendingExportKeyId.value = keyId
+    }
+
+    fun clearPendingExport() {
+        _pendingExportKeyId.value = null
+    }
+
+    fun getExportFileName(keyId: String): String {
+        val key = keys.value.firstOrNull { it.id == keyId } ?: return "id_key"
+        val sanitized = key.label.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        return "id_$sanitized"
+    }
+
+    fun exportPrivateKey(context: Context, keyId: String, destinationUri: Uri) {
+        viewModelScope.launch {
+            try {
+                val pemBytes = withContext(Dispatchers.IO) {
+                    val decrypted = repository.getDecryptedKeyBytes(keyId)
+                        ?: throw IllegalStateException("Key not found")
+                    val key = keys.value.firstOrNull { it.id == keyId }
+                        ?: throw IllegalStateException("Key not found")
+                    SshKeyExporter.toPem(decrypted, key.keyType)
+                }
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(destinationUri)?.use { out ->
+                        out.write(pemBytes)
+                    } ?: throw IllegalStateException("Cannot open output stream")
+                }
+                _message.value = "Private key exported"
+            } catch (e: Exception) {
+                Log.e("KeysViewModel", "Export failed", e)
+                _error.value = "Export failed: ${e.message}"
+            }
+        }
     }
 
     fun deleteKey(id: String) {

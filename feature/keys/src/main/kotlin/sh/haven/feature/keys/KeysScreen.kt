@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.AlertDialog
@@ -66,6 +67,8 @@ fun KeysScreen(
     val error by viewModel.error.collectAsState()
     val needsPassphrase by viewModel.needsPassphrase.collectAsState()
     val importResult by viewModel.importResult.collectAsState()
+    val message by viewModel.message.collectAsState()
+    val pendingExportKeyId by viewModel.pendingExportKeyId.collectAsState()
 
     var showAddKeyDialog by remember { mutableStateOf(false) }
     var showGenerateDialog by remember { mutableStateOf(false) }
@@ -82,10 +85,33 @@ fun KeysScreen(
         }
     }
 
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/x-pem-file"),
+    ) { uri ->
+        val keyId = pendingExportKeyId
+        viewModel.clearPendingExport()
+        if (uri != null && keyId != null) {
+            viewModel.exportPrivateKey(context, keyId, uri)
+        }
+    }
+
+    LaunchedEffect(pendingExportKeyId) {
+        pendingExportKeyId?.let { keyId ->
+            exportLauncher.launch(viewModel.getExportFileName(keyId))
+        }
+    }
+
     LaunchedEffect(error) {
         error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.dismissError()
+        }
+    }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissMessage()
         }
     }
 
@@ -191,6 +217,16 @@ fun KeysScreen(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Filled.ContentCopy, contentDescription = null)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export private key") },
+                                onClick = {
+                                    contextMenuKeyId = null
+                                    viewModel.requestExport(sshKey.id)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.FileDownload, contentDescription = null)
                                 },
                             )
                             DropdownMenuItem(
