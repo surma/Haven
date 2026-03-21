@@ -16,21 +16,26 @@ object SshKeyExporter {
 
     fun toPem(privateKeyBytes: ByteArray, keyType: String): ByteArray {
         // If it already looks like a PEM or OpenSSH private key, return as-is
-        val text = privateKeyBytes.decodeToString()
-        if (text.startsWith("-----BEGIN ")) {
+        if (privateKeyBytes.size > 5 && privateKeyBytes[0] == '-'.code.toByte()) {
             return privateKeyBytes
         }
 
-        // Use JSch to convert to PEM
+        // Ed25519 raw 32-byte seed → OpenSSH private key format
+        if (keyType == "ssh-ed25519" && privateKeyBytes.size == 32) {
+            return encodeOpenSshEd25519(privateKeyBytes)
+        }
+
+        // PKCS#8 DER (RSA/ECDSA from JCA) → PEM wrapper
+        // DER starts with 0x30 (SEQUENCE tag)
+        if (privateKeyBytes.isNotEmpty() && privateKeyBytes[0] == 0x30.toByte()) {
+            return wrapPkcs8Pem(privateKeyBytes)
+        }
+
+        // Try JSch as last resort
         val jsch = JSch()
         val kpair = try {
             KeyPair.load(jsch, privateKeyBytes, null)
         } catch (_: Exception) {
-            // Raw key bytes (e.g. Ed25519 32-byte seed) — try generating from seed
-            if (keyType == "ssh-ed25519" && privateKeyBytes.size == 32) {
-                return encodeOpenSshEd25519(privateKeyBytes)
-            }
-            // Unknown format — return raw bytes as fallback
             return privateKeyBytes
         }
 
@@ -39,11 +44,16 @@ object SshKeyExporter {
             kpair.writePrivateKey(out)
             out.toByteArray()
         } catch (_: UnsupportedOperationException) {
-            // JSch can't serialize some key types — return original bytes
             privateKeyBytes
         } finally {
             kpair.dispose()
         }
+    }
+
+    private fun wrapPkcs8Pem(der: ByteArray): ByteArray {
+        val b64 = java.util.Base64.getMimeEncoder(64, "\n".toByteArray())
+            .encodeToString(der)
+        return "-----BEGIN PRIVATE KEY-----\n$b64\n-----END PRIVATE KEY-----\n".toByteArray()
     }
 
     /**

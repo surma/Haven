@@ -201,4 +201,98 @@ class SshKeyImporterTest {
         assertEquals(r1.publicKeyOpenSsh, r2.publicKeyOpenSsh)
         assertEquals(r1.keyType, r2.keyType)
     }
+
+    // ---- import() with encrypted Ed25519 key ----
+
+    // Throwaway Ed25519 key encrypted with passphrase "test-ed25519-pass" for use as a test fixture only.
+    // Generated with: ssh-keygen -t ed25519 -N "test-ed25519-pass" -f /tmp/haven_test_ed25519_enc
+    // This key must never be used for real authentication.
+    private val encryptedEd25519Pem = """
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABCS3fhvqX
+        dOf0JZQYdTkkENAAAAGAAAAAEAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIOnBvgn2SbqahNXp
+        f4MYj7/fV1X5c3ZkeuRALlPF5DbbAAAAkFKTXlDYAaLvgux4vT8ZQA363ibu21QxUKVZEU
+        O6p/yhMpBUTSE/bZhDBhzjKW1KacHT3j4uS4CFgS52HtJKHAo3gnFBHDMWmUPNN0QagmT1
+        2Ohjr/FduMCU9VhS77D1jk3cxW14ryUDgKbtzM5QJ04D46zYGvgbxSgP2IV9JwAAVFshzM
+        A2XAvQgB2Qe2XfKg==
+        -----END OPENSSH PRIVATE KEY-----
+    """.trimIndent().toByteArray()
+
+    @Test(expected = SshKeyImporter.EncryptedKeyException::class)
+    fun `import encrypted Ed25519 key without passphrase throws EncryptedKeyException`() {
+        SshKeyImporter.import(encryptedEd25519Pem)
+    }
+
+    @Test
+    fun `import encrypted Ed25519 key with correct passphrase returns ssh-ed25519 type`() {
+        val result = SshKeyImporter.import(encryptedEd25519Pem, "test-ed25519-pass")
+        assertEquals("ssh-ed25519", result.keyType)
+    }
+
+    @Test
+    fun `import encrypted Ed25519 key with correct passphrase stores decrypted bytes`() {
+        val result = SshKeyImporter.import(encryptedEd25519Pem, "test-ed25519-pass")
+        assertFalse(
+            "Stored key bytes should not equal the encrypted input",
+            encryptedEd25519Pem.contentEquals(result.privateKeyBytes)
+        )
+    }
+
+    @Test
+    fun `import encrypted Ed25519 key extracts 32-byte seed`() {
+        val result = SshKeyImporter.import(encryptedEd25519Pem, "test-ed25519-pass")
+        // The extracted seed should be exactly 32 bytes (raw Ed25519 private key)
+        assertEquals(
+            "Expected 32-byte Ed25519 seed",
+            32, result.privateKeyBytes.size
+        )
+    }
+
+    @Test
+    fun `import encrypted Ed25519 key produces valid fingerprint`() {
+        val result = SshKeyImporter.import(encryptedEd25519Pem, "test-ed25519-pass")
+        assertTrue(
+            "Expected fingerprint to start with SHA256:, got: ${result.fingerprintSha256}",
+            result.fingerprintSha256.startsWith("SHA256:")
+        )
+    }
+
+    @Test
+    fun `import encrypted Ed25519 key produces openssh public key line`() {
+        val result = SshKeyImporter.import(encryptedEd25519Pem, "test-ed25519-pass")
+        assertTrue(
+            "Expected public key to start with ssh-ed25519, got: ${result.publicKeyOpenSsh}",
+            result.publicKeyOpenSsh.startsWith("ssh-ed25519 ")
+        )
+    }
+
+    // ---- import() with unencrypted Ed25519 key ----
+
+    // Throwaway unencrypted Ed25519 key for use as a test fixture only.
+    // Generated with: ssh-keygen -t ed25519 -N "" -f /tmp/haven_test_ed25519_plain
+    // This key must never be used for real authentication.
+    private val unencryptedEd25519Pem = """
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+        QyNTUxOQAAACAGDEAEY/2eTWPYbI21/d13lEIrFjHWa11tKBnYa6M6xgAAAJihYZxQoWGc
+        UAAAAAtzc2gtZWQyNTUxOQAAACAGDEAEY/2eTWPYbI21/d13lEIrFjHWa11tKBnYa6M6xg
+        AAAEASnxhlh0i/Gz1H26nWiojhTd888E1YQC1hgnYMnaZuuAYMQARj/Z5NY9hsjbX93XeU
+        QisWMdZrXW0oGdhrozrGAAAAEGhhdmVuLXRlc3QtcGxhaW4BAgMEBQ==
+        -----END OPENSSH PRIVATE KEY-----
+    """.trimIndent().toByteArray()
+
+    @Test
+    fun `import unencrypted Ed25519 key preserves original file bytes`() {
+        val result = SshKeyImporter.import(unencryptedEd25519Pem)
+        assertTrue(
+            "Unencrypted key should be stored as original file bytes",
+            unencryptedEd25519Pem.contentEquals(result.privateKeyBytes)
+        )
+    }
+
+    @Test
+    fun `import unencrypted Ed25519 key returns ssh-ed25519 type`() {
+        val result = SshKeyImporter.import(unencryptedEd25519Pem)
+        assertEquals("ssh-ed25519", result.keyType)
+    }
 }

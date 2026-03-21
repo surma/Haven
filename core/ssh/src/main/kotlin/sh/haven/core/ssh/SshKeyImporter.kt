@@ -65,10 +65,9 @@ object SshKeyImporter {
                     kpair.writePrivateKey(out)
                     out.toByteArray()
                 } catch (_: UnsupportedOperationException) {
-                    // JSch can't re-serialize some key types (e.g. Ed25519).
-                    // Fall back to storing original bytes — passphrase will be
-                    // needed at connect time via the password dialog.
-                    fileBytes
+                    // JSch can't re-serialize Ed25519 keys via writePrivateKey().
+                    // Extract the raw 32-byte seed via reflection instead.
+                    extractEd25519Seed(kpair) ?: fileBytes
                 }
             } else {
                 fileBytes
@@ -82,6 +81,32 @@ object SshKeyImporter {
             )
         } finally {
             kpair.dispose()
+        }
+    }
+
+    /**
+     * Extract the raw Ed25519 private key seed (32 bytes) from a decrypted JSch KeyPair
+     * via reflection. JSch stores it in KeyPairEdDSA.prv_array but has no public accessor.
+     * KeyPairEd25519 extends KeyPairEdDSA, so we walk the class hierarchy.
+     * Returns null if reflection fails (field renamed, different KeyPair subclass, etc.).
+     */
+    private fun extractEd25519Seed(kpair: KeyPair): ByteArray? {
+        return try {
+            var cls: Class<*>? = kpair.javaClass
+            while (cls != null) {
+                try {
+                    val field = cls.getDeclaredField("prv_array")
+                    field.isAccessible = true
+                    val seed = field.get(kpair) as? ByteArray
+                    if (seed != null && seed.size == 32) return seed
+                } catch (_: NoSuchFieldException) {
+                    // Try parent class
+                }
+                cls = cls.superclass
+            }
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 
