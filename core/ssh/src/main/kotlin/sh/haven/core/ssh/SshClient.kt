@@ -67,7 +67,9 @@ class SshClient : Closeable {
 
         when (val auth = config.authMethod) {
             is ConnectionConfig.AuthMethod.Password -> {
-                sess.setPassword(auth.password)
+                val pw = String(auth.password)
+                sess.setPassword(pw)
+                auth.clear()
             }
             is ConnectionConfig.AuthMethod.PrivateKey -> {
                 jsch.addIdentity(
@@ -87,7 +89,6 @@ class SshClient : Closeable {
                 Log.d(TAG, "FIDO2 SK key: alg=${skData.algorithmName}, app=${skData.application}")
                 val fidoIdentity = FidoIdentity(skData, fidoAuthenticator!!)
                 jsch.addIdentity(fidoIdentity, null)
-                // Add SK algorithms to accepted list
                 val currentAlgs = sess.getConfig("PubkeyAcceptedAlgorithms") ?: ""
                 val skAlgs = "sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com"
                 sess.setConfig("PubkeyAcceptedAlgorithms",
@@ -188,7 +189,9 @@ class SshClient : Closeable {
 
         when (val auth = config.authMethod) {
             is ConnectionConfig.AuthMethod.Password -> {
-                sess.setPassword(auth.password)
+                val pw = String(auth.password)
+                sess.setPassword(pw)
+                auth.clear()
             }
             is ConnectionConfig.AuthMethod.PrivateKey -> {
                 jsch.addIdentity(

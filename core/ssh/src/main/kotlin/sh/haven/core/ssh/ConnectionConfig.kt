@@ -14,7 +14,11 @@ data class ConnectionConfig(
     }
 
     sealed interface AuthMethod {
-        data class Password(val password: String) : AuthMethod
+        /** Password auth. Use [clear] to zero the password from memory after authentication. */
+        class Password(val password: CharArray) : AuthMethod {
+            constructor(passwordString: String) : this(passwordString.toCharArray())
+            fun clear() { password.fill('\u0000') }
+        }
         data class PrivateKey(val keyBytes: ByteArray, val passphrase: String = "") : AuthMethod {
             override fun equals(other: Any?): Boolean {
                 if (this === other) return true

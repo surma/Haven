@@ -645,6 +645,31 @@ class ConnectionsViewModel @Inject constructor(
         localSessionManager.prootManager.resetDesktopState()
     }
 
+    /** True if the PRoot desktop environment is already installed. */
+    val isDesktopInstalled: Boolean
+        get() = localSessionManager.prootManager.isDesktopInstalled
+
+    private val _launchingDesktop = MutableStateFlow(false)
+    val launchingDesktop: StateFlow<Boolean> = _launchingDesktop.asStateFlow()
+
+    /** Launch an already-installed desktop — start VNC server and navigate to viewer. */
+    fun launchDesktop(localProfile: ConnectionProfile) {
+        if (_launchingDesktop.value) return // prevent double-tap
+        viewModelScope.launch {
+            _launchingDesktop.value = true
+            val prootManager = localSessionManager.prootManager
+            withContext(Dispatchers.IO) {
+                prootManager.startVncServer()
+            }
+            val pwd = connections.value
+                .find { it.isVnc && it.host == "localhost" && it.vncPort == 5901 }
+                ?.vncPassword
+            delay(4000) // VNC server startup
+            _navigateToVnc.value = VncNavigation("localhost", 5901, pwd)
+            _launchingDesktop.value = false
+        }
+    }
+
     private fun connectLocal(profile: ConnectionProfile) {
         viewModelScope.launch {
             // Skip if already connected

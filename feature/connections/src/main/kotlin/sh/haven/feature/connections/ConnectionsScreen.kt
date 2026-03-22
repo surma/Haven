@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LinkOff
@@ -138,6 +139,7 @@ fun ConnectionsScreen(
     val discoveredHosts by viewModel.discoveredHosts.collectAsState()
     val localVmStatus by viewModel.localVmStatus.collectAsState()
     val connectingProfileId by viewModel.connectingProfileId.collectAsState()
+    val launchingDesktop by viewModel.launchingDesktop.collectAsState()
     val error by viewModel.error.collectAsState()
     val navigateToTerminal by viewModel.navigateToTerminal.collectAsState()
     val navigateToVnc by viewModel.navigateToVnc.collectAsState()
@@ -639,6 +641,9 @@ fun ConnectionsScreen(
                                 onPortForwards = { portForwardProfile = profile },
                                 onNewSession = { viewModel.openNewSession(profile.id) },
                                 onSetupDesktop = { setupDesktopProfile = profile },
+                                onLaunchDesktop = { viewModel.launchDesktop(profile) },
+                                isDesktopInstalled = viewModel.isDesktopInstalled,
+                                isLaunchingDesktop = launchingDesktop,
                                 dragModifier = Modifier
                                     .zIndex(if (isDragged) 1f else 0f)
                                     .offset(
@@ -709,6 +714,9 @@ fun ConnectionsScreen(
                                     onPortForwards = { portForwardProfile = dep },
                                     onNewSession = { viewModel.openNewSession(dep.id) },
                                     onSetupDesktop = { setupDesktopProfile = dep },
+                                    onLaunchDesktop = { viewModel.launchDesktop(dep) },
+                                    isDesktopInstalled = viewModel.isDesktopInstalled,
+                                    isLaunchingDesktop = launchingDesktop,
                                 )
                             }
                         }
@@ -804,6 +812,9 @@ private fun ConnectionTreeItem(
     onPortForwards: () -> Unit,
     onNewSession: () -> Unit,
     onSetupDesktop: () -> Unit = {},
+    onLaunchDesktop: () -> Unit = {},
+    isDesktopInstalled: Boolean = false,
+    isLaunchingDesktop: Boolean = false,
     dragModifier: Modifier = Modifier,
     onDragStart: () -> Unit = {},
     onDrag: (Float) -> Unit = {},
@@ -930,6 +941,19 @@ private fun ConnectionTreeItem(
                         )
                     }
                 },
+                trailingContent = if (profile.isLocal) {{
+                    if (isLaunchingDesktop) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = if (isDesktopInstalled) onLaunchDesktop else onSetupDesktop) {
+                            Icon(
+                                Icons.Filled.DesktopWindows,
+                                contentDescription = if (isDesktopInstalled) "Launch Desktop" else "Setup Desktop",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }} else null,
                 modifier = Modifier
                     .weight(1f)
                     .combinedClickable(

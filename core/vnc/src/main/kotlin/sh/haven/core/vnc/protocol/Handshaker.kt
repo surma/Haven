@@ -91,6 +91,7 @@ object Handshaker {
         val keyBytes = ByteArray(8)
         val pwBytes = password.toByteArray(Charsets.US_ASCII)
         System.arraycopy(pwBytes, 0, keyBytes, 0, minOf(pwBytes.size, 8))
+        pwBytes.fill(0) // zero plaintext password bytes
 
         // VNC reverses bits in each byte of the key
         for (i in keyBytes.indices) {
@@ -99,6 +100,7 @@ object Handshaker {
 
         val cipher = Cipher.getInstance("DES/ECB/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "DES"))
+        keyBytes.fill(0) // zero DES key material
         val response = cipher.doFinal(challenge)
 
         session.outputStream.write(response)

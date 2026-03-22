@@ -48,7 +48,9 @@ class SmbClient : Closeable {
     ) {
         val smbClient = SMBClient()
         val conn = smbClient.connect(host, port)
-        val auth = AuthenticationContext(username, password.toCharArray(), domain)
+        val pwChars = password.toCharArray()
+        val auth = AuthenticationContext(username, pwChars, domain)
+        pwChars.fill('\u0000') // zero password from memory
         val sess = conn.authenticate(auth)
         val diskShare = sess.connectShare(shareName) as DiskShare
 
