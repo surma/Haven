@@ -31,7 +31,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,6 +92,20 @@ private val NAV_GRID_BOTTOM = arrayOf(
 /** Width of each cell in the nav block grid. */
 private val NAV_CELL_WIDTH = 44.dp
 
+/** Bundled callbacks threaded through the toolbar composable hierarchy. */
+data class ToolbarCallbacks(
+    val onSendBytes: (ByteArray) -> Unit,
+    val onDispatchKey: (Int, Int) -> Unit,
+    val onToggleCtrl: () -> Unit,
+    val onToggleAlt: () -> Unit,
+    val onToggleShift: () -> Unit,
+    val onShiftUsed: () -> Unit,
+)
+
+val LocalToolbarCallbacks = compositionLocalOf<ToolbarCallbacks> {
+    error("ToolbarCallbacks not provided")
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeyboardToolbar(
@@ -113,76 +129,67 @@ fun KeyboardToolbar(
     val view = LocalView.current
     val imeVisible = WindowInsets.isImeVisible
 
-    Surface(
-        tonalElevation = 2.dp,
-        modifier = modifier,
-    ) {
-        if (selectionActive && selectionController != null) {
-            // Selection mode: show selection controls, optionally with row 1.
-            Column {
-                if (layout.rows.size >= 2) {
-                    // Keep row 1 visible so height stays at 2 rows
-                    ToolbarRow(
-                        items = layout.row1,
-                        onSendBytes = onSendBytes,
-                        focusRequester = focusRequester,
-                        ctrlActive = ctrlActive,
-                        altActive = altActive,
-                        shiftActive = shiftActive,
-                        imeVisible = imeVisible,
-                        view = view,
-                        onToggleCtrl = onToggleCtrl,
-                        onToggleAlt = onToggleAlt,
-                        onToggleShift = { shiftActive = !shiftActive },
-                        onShiftUsed = { shiftActive = false },
-                        onVncTap = onVncTap,
-                    )
-                }
-                SelectionToolbarContent(
-                    controller = selectionController,
-                    hyperlinkUri = hyperlinkUri,
-                    bracketPasteMode = bracketPasteMode,
-                    onPaste = onPaste,
-                )
-            }
-        } else if (layout.rows.size >= 2) {
-            // Two-row layout: use aligned nav block grid
-            AlignedToolbarContent(
-                layout = layout,
-                onSendBytes = onSendBytes,
-                onDispatchKey = onDispatchKey,
-                focusRequester = focusRequester,
-                ctrlActive = ctrlActive,
-                altActive = altActive,
-                shiftActive = shiftActive,
-                imeVisible = imeVisible,
-                view = view,
-                onToggleCtrl = onToggleCtrl,
-                onToggleAlt = onToggleAlt,
-                onToggleShift = { shiftActive = !shiftActive },
-                onShiftUsed = { shiftActive = false },
-                onVncTap = onVncTap,
-            )
-        } else {
-            // Single-row fallback
-            Column {
-                for (row in layout.rows) {
-                    if (row.isNotEmpty()) {
+    val callbacks = ToolbarCallbacks(
+        onSendBytes = onSendBytes,
+        onDispatchKey = onDispatchKey,
+        onToggleCtrl = onToggleCtrl,
+        onToggleAlt = onToggleAlt,
+        onToggleShift = { shiftActive = !shiftActive },
+        onShiftUsed = { shiftActive = false },
+    )
+
+    CompositionLocalProvider(LocalToolbarCallbacks provides callbacks) {
+        Surface(
+            tonalElevation = 2.dp,
+            modifier = modifier,
+        ) {
+            if (selectionActive && selectionController != null) {
+                Column {
+                    if (layout.rows.size >= 2) {
                         ToolbarRow(
-                            items = row,
-                            onSendBytes = onSendBytes,
+                            items = layout.row1,
                             focusRequester = focusRequester,
                             ctrlActive = ctrlActive,
                             altActive = altActive,
                             shiftActive = shiftActive,
                             imeVisible = imeVisible,
                             view = view,
-                            onToggleCtrl = onToggleCtrl,
-                            onToggleAlt = onToggleAlt,
-                            onToggleShift = { shiftActive = !shiftActive },
-                            onShiftUsed = { shiftActive = false },
                             onVncTap = onVncTap,
                         )
+                    }
+                    SelectionToolbarContent(
+                        controller = selectionController,
+                        hyperlinkUri = hyperlinkUri,
+                        bracketPasteMode = bracketPasteMode,
+                        onPaste = onPaste,
+                    )
+                }
+            } else if (layout.rows.size >= 2) {
+                AlignedToolbarContent(
+                    layout = layout,
+                    focusRequester = focusRequester,
+                    ctrlActive = ctrlActive,
+                    altActive = altActive,
+                    shiftActive = shiftActive,
+                    imeVisible = imeVisible,
+                    view = view,
+                    onVncTap = onVncTap,
+                )
+            } else {
+                Column {
+                    for (row in layout.rows) {
+                        if (row.isNotEmpty()) {
+                            ToolbarRow(
+                                items = row,
+                                focusRequester = focusRequester,
+                                ctrlActive = ctrlActive,
+                                altActive = altActive,
+                                shiftActive = shiftActive,
+                                imeVisible = imeVisible,
+                                view = view,
+                                onVncTap = onVncTap,
+                            )
+                        }
                     }
                 }
             }
@@ -199,20 +206,15 @@ fun KeyboardToolbar(
 @Composable
 private fun AlignedToolbarContent(
     layout: ToolbarLayout,
-    onSendBytes: (ByteArray) -> Unit,
-    onDispatchKey: (Int, Int) -> Unit = { _, _ -> },
     focusRequester: FocusRequester,
     ctrlActive: Boolean,
     altActive: Boolean,
     shiftActive: Boolean,
     imeVisible: Boolean,
     view: android.view.View,
-    onToggleCtrl: () -> Unit,
-    onToggleAlt: () -> Unit,
-    onToggleShift: () -> Unit,
-    onShiftUsed: () -> Unit,
     onVncTap: (() -> Unit)?,
 ) {
+    val cb = LocalToolbarCallbacks.current
     // Split each row into: left (non-nav), right (non-nav after nav keys)
     val (row1Left, row1Right) = splitAroundNav(layout.row1)
     val (row2Left, row2Right) = splitAroundNav(layout.row2)
@@ -227,10 +229,10 @@ private fun AlignedToolbarContent(
     // If no nav keys present, fall back to simple rows
     if (presentNavKeys.isEmpty()) {
         Column {
-            ToolbarRow(layout.row1, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed, onVncTap)
-            ToolbarRow(layout.row2, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed, onVncTap)
+            ToolbarRow(layout.row1, focusRequester, ctrlActive, altActive,
+                shiftActive, imeVisible, view, onVncTap)
+            ToolbarRow(layout.row2, focusRequester, ctrlActive, altActive,
+                shiftActive, imeVisible, view, onVncTap)
         }
         return
     }
@@ -245,8 +247,8 @@ private fun AlignedToolbarContent(
         Column(modifier = Modifier.width(IntrinsicSize.Max)) {
             KeyRow(Modifier.fillMaxWidth()) {
                 for (item in row1Left) {
-                    RenderItem(item, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                        shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed)
+                    RenderItem(item, focusRequester, ctrlActive, altActive,
+                        shiftActive, imeVisible, view)
                 }
             }
             KeyRow(Modifier.fillMaxWidth()) {
@@ -255,8 +257,8 @@ private fun AlignedToolbarContent(
                     ToolbarIconButton(Icons.Filled.DesktopWindows, "VNC Desktop", onVncTap)
                 }
                 for (item in row2Left) {
-                    RenderItem(item, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                        shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed)
+                    RenderItem(item, focusRequester, ctrlActive, altActive,
+                        shiftActive, imeVisible, view)
                 }
             }
         }
@@ -266,7 +268,7 @@ private fun AlignedToolbarContent(
             KeyRow {
                 for (key in NAV_GRID_TOP) {
                     if (key != null && key in presentNavKeys) {
-                        NavBuiltInKey(key, onSendBytes, onDispatchKey, shiftActive, onShiftUsed)
+                        NavBuiltInKey(key, shiftActive)
                     } else {
                         NavCell {}
                     }
@@ -275,7 +277,7 @@ private fun AlignedToolbarContent(
             KeyRow {
                 for (key in NAV_GRID_BOTTOM) {
                     if (key != null && key in presentNavKeys) {
-                        NavBuiltInKey(key, onSendBytes, onDispatchKey, shiftActive, onShiftUsed)
+                        NavBuiltInKey(key, shiftActive)
                     } else {
                         NavCell {}
                     }
@@ -289,8 +291,8 @@ private fun AlignedToolbarContent(
                 if (row1Right.isNotEmpty()) {
                     KeyRow {
                         for (item in row1Right) {
-                            RenderItem(item, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                                shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed)
+                            RenderItem(item, focusRequester, ctrlActive, altActive,
+                                shiftActive, imeVisible, view)
                         }
                     }
                 } else {
@@ -298,8 +300,8 @@ private fun AlignedToolbarContent(
                 }
                 KeyRow {
                     for (item in row2Right) {
-                        RenderItem(item, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                            shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed)
+                        RenderItem(item, focusRequester, ctrlActive, altActive,
+                            shiftActive, imeVisible, view)
                     }
                 }
             }
@@ -335,22 +337,20 @@ private fun splitAroundNav(row: List<ToolbarItem>): Pair<List<ToolbarItem>, List
 @Composable
 private fun NavBuiltInKey(
     key: ToolbarKey,
-    onSendBytes: (ByteArray) -> Unit,
-    onDispatchKey: (Int, Int) -> Unit,
     shiftActive: Boolean,
-    onShiftUsed: () -> Unit,
 ) {
+    val cb = LocalToolbarCallbacks.current
     // Arrow and nav keys go through dispatchKey so libvterm applies
     // DECCKM (application cursor mode) — needed for Mutt, vim, etc.
     when (key) {
-        ToolbarKey.ARROW_LEFT -> NavArrowButton("\u2190") { onDispatchKey(0, VTERM_KEY_LEFT) }
-        ToolbarKey.ARROW_UP -> NavArrowButton("\u2191") { onDispatchKey(0, VTERM_KEY_UP) }
-        ToolbarKey.ARROW_DOWN -> NavArrowButton("\u2193") { onDispatchKey(0, VTERM_KEY_DOWN) }
-        ToolbarKey.ARROW_RIGHT -> NavArrowButton("\u2192") { onDispatchKey(0, VTERM_KEY_RIGHT) }
-        ToolbarKey.HOME -> NavTextButton("Home") { onDispatchKey(0, VTERM_KEY_HOME) }
-        ToolbarKey.END -> NavTextButton("End") { onDispatchKey(0, VTERM_KEY_END) }
-        ToolbarKey.PGUP -> NavTextButton("PgUp") { onDispatchKey(0, VTERM_KEY_PAGEUP) }
-        ToolbarKey.PGDN -> NavTextButton("PgDn") { onDispatchKey(0, VTERM_KEY_PAGEDOWN) }
+        ToolbarKey.ARROW_LEFT -> NavArrowButton("\u2190") { cb.onDispatchKey(0, VTERM_KEY_LEFT) }
+        ToolbarKey.ARROW_UP -> NavArrowButton("\u2191") { cb.onDispatchKey(0, VTERM_KEY_UP) }
+        ToolbarKey.ARROW_DOWN -> NavArrowButton("\u2193") { cb.onDispatchKey(0, VTERM_KEY_DOWN) }
+        ToolbarKey.ARROW_RIGHT -> NavArrowButton("\u2192") { cb.onDispatchKey(0, VTERM_KEY_RIGHT) }
+        ToolbarKey.HOME -> NavTextButton("Home") { cb.onDispatchKey(0, VTERM_KEY_HOME) }
+        ToolbarKey.END -> NavTextButton("End") { cb.onDispatchKey(0, VTERM_KEY_END) }
+        ToolbarKey.PGUP -> NavTextButton("PgUp") { cb.onDispatchKey(0, VTERM_KEY_PAGEUP) }
+        ToolbarKey.PGDN -> NavTextButton("PgDn") { cb.onDispatchKey(0, VTERM_KEY_PAGEDOWN) }
         else -> Spacer(Modifier.width(NAV_CELL_WIDTH))
     }
 }
@@ -369,48 +369,37 @@ private const val VTERM_KEY_PAGEDOWN = 14
 @Composable
 private fun RenderItem(
     item: ToolbarItem,
-    onSendBytes: (ByteArray) -> Unit,
-    onDispatchKey: (Int, Int) -> Unit = { _, _ -> },
     focusRequester: FocusRequester,
     ctrlActive: Boolean,
     altActive: Boolean,
     shiftActive: Boolean,
     imeVisible: Boolean,
     view: android.view.View,
-    onToggleCtrl: () -> Unit,
-    onToggleAlt: () -> Unit,
-    onToggleShift: () -> Unit,
-    onShiftUsed: () -> Unit,
 ) {
+    val cb = LocalToolbarCallbacks.current
     when (item) {
         is ToolbarItem.BuiltIn -> BuiltInKey(
             key = item.key,
-            onSendBytes = onSendBytes,
-            onDispatchKey = onDispatchKey,
             focusRequester = focusRequester,
             ctrlActive = ctrlActive,
             altActive = altActive,
             shiftActive = shiftActive,
             imeVisible = imeVisible,
             view = view,
-            onToggleCtrl = onToggleCtrl,
-            onToggleAlt = onToggleAlt,
-            onToggleShift = onToggleShift,
-            onShiftUsed = onShiftUsed,
         )
         is ToolbarItem.Custom -> {
             SymbolButton(item.label) {
                 val bytes = item.send.toByteArray()
                 if (ctrlActive || altActive) {
                     if (item.send.length == 1) {
-                        sendChar(item.send[0], ctrlActive, altActive, onSendBytes)
+                        sendChar(item.send[0], ctrlActive, altActive, cb.onSendBytes)
                     } else {
-                        onSendBytes(bytes)
+                        cb.onSendBytes(bytes)
                     }
-                    if (ctrlActive) onToggleCtrl()
-                    if (altActive) onToggleAlt()
+                    if (ctrlActive) cb.onToggleCtrl()
+                    if (altActive) cb.onToggleAlt()
                 } else {
-                    onSendBytes(bytes)
+                    cb.onSendBytes(bytes)
                 }
             }
         }
@@ -420,18 +409,12 @@ private fun RenderItem(
 @Composable
 private fun ToolbarRow(
     items: List<ToolbarItem>,
-    onSendBytes: (ByteArray) -> Unit,
-    onDispatchKey: (Int, Int) -> Unit = { _, _ -> },
     focusRequester: FocusRequester,
     ctrlActive: Boolean,
     altActive: Boolean,
     shiftActive: Boolean,
     imeVisible: Boolean,
     view: android.view.View,
-    onToggleCtrl: () -> Unit,
-    onToggleAlt: () -> Unit,
-    onToggleShift: () -> Unit,
-    onShiftUsed: () -> Unit,
     onVncTap: (() -> Unit)? = null,
 ) {
     Row(
@@ -441,8 +424,8 @@ private fun ToolbarRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (item in items) {
-            RenderItem(item, onSendBytes, onDispatchKey, focusRequester, ctrlActive, altActive,
-                shiftActive, imeVisible, view, onToggleCtrl, onToggleAlt, onToggleShift, onShiftUsed)
+            RenderItem(item, focusRequester, ctrlActive, altActive,
+                shiftActive, imeVisible, view)
             if (item is ToolbarItem.BuiltIn && item.key == ToolbarKey.KEYBOARD && onVncTap != null) {
                 ToolbarIconButton(Icons.Filled.DesktopWindows, "VNC Desktop", onVncTap)
             }
@@ -453,19 +436,14 @@ private fun ToolbarRow(
 @Composable
 private fun BuiltInKey(
     key: ToolbarKey,
-    onSendBytes: (ByteArray) -> Unit,
-    onDispatchKey: (Int, Int) -> Unit = { _, _ -> },
     focusRequester: FocusRequester,
     ctrlActive: Boolean,
     altActive: Boolean,
     shiftActive: Boolean,
     imeVisible: Boolean,
     view: android.view.View,
-    onToggleCtrl: () -> Unit,
-    onToggleAlt: () -> Unit,
-    onToggleShift: () -> Unit,
-    onShiftUsed: () -> Unit,
 ) {
+    val cb = LocalToolbarCallbacks.current
     when (key) {
         ToolbarKey.KEYBOARD -> {
             ToolbarIconButton(Icons.Filled.Keyboard, "Toggle keyboard") {
@@ -479,45 +457,45 @@ private fun BuiltInKey(
                 }
             }
         }
-        ToolbarKey.ESC_KEY -> ToolbarTextButton("Esc") { onSendBytes(KEY_ESC) }
+        ToolbarKey.ESC_KEY -> ToolbarTextButton("Esc") { cb.onSendBytes(KEY_ESC) }
         ToolbarKey.TAB_KEY -> ToolbarTextButton("Tab") {
             if (shiftActive) {
-                onSendBytes(KEY_SHIFT_TAB)
-                onShiftUsed()
+                cb.onSendBytes(KEY_SHIFT_TAB)
+                cb.onShiftUsed()
             } else {
-                onSendBytes(KEY_TAB)
+                cb.onSendBytes(KEY_TAB)
             }
         }
-        ToolbarKey.SHIFT -> ToolbarToggleButton("Shift", shiftActive, onClick = onToggleShift)
-        ToolbarKey.CTRL -> ToolbarToggleButton("Ctrl", ctrlActive, onClick = onToggleCtrl)
-        ToolbarKey.ALT -> ToolbarToggleButton("Alt", altActive, onClick = onToggleAlt)
+        ToolbarKey.SHIFT -> ToolbarToggleButton("Shift", shiftActive, onClick = cb.onToggleShift)
+        ToolbarKey.CTRL -> ToolbarToggleButton("Ctrl", ctrlActive, onClick = cb.onToggleCtrl)
+        ToolbarKey.ALT -> ToolbarToggleButton("Alt", altActive, onClick = cb.onToggleAlt)
         ToolbarKey.ALTGR -> {
             val altGrActive = ctrlActive && altActive
             ToolbarToggleButton("AltGr", altGrActive) {
                 if (altGrActive) {
-                    onToggleCtrl()
-                    onToggleAlt()
+                    cb.onToggleCtrl()
+                    cb.onToggleAlt()
                 } else {
-                    if (!ctrlActive) onToggleCtrl()
-                    if (!altActive) onToggleAlt()
+                    if (!ctrlActive) cb.onToggleCtrl()
+                    if (!altActive) cb.onToggleAlt()
                 }
             }
         }
         // Nav keys — routed through dispatchKey for DECCKM support
-        ToolbarKey.ARROW_LEFT -> ToolbarArrowButton("\u2190") { onDispatchKey(0, VTERM_KEY_LEFT) }
-        ToolbarKey.ARROW_UP -> ToolbarArrowButton("\u2191") { onDispatchKey(0, VTERM_KEY_UP) }
-        ToolbarKey.ARROW_DOWN -> ToolbarArrowButton("\u2193") { onDispatchKey(0, VTERM_KEY_DOWN) }
-        ToolbarKey.ARROW_RIGHT -> ToolbarArrowButton("\u2192") { onDispatchKey(0, VTERM_KEY_RIGHT) }
-        ToolbarKey.HOME -> ToolbarTextButton("Home") { onDispatchKey(0, VTERM_KEY_HOME) }
-        ToolbarKey.END -> ToolbarTextButton("End") { onDispatchKey(0, VTERM_KEY_END) }
-        ToolbarKey.PGUP -> ToolbarTextButton("PgUp") { onDispatchKey(0, VTERM_KEY_PAGEUP) }
-        ToolbarKey.PGDN -> ToolbarTextButton("PgDn") { onDispatchKey(0, VTERM_KEY_PAGEDOWN) }
+        ToolbarKey.ARROW_LEFT -> ToolbarArrowButton("\u2190") { cb.onDispatchKey(0, VTERM_KEY_LEFT) }
+        ToolbarKey.ARROW_UP -> ToolbarArrowButton("\u2191") { cb.onDispatchKey(0, VTERM_KEY_UP) }
+        ToolbarKey.ARROW_DOWN -> ToolbarArrowButton("\u2193") { cb.onDispatchKey(0, VTERM_KEY_DOWN) }
+        ToolbarKey.ARROW_RIGHT -> ToolbarArrowButton("\u2192") { cb.onDispatchKey(0, VTERM_KEY_RIGHT) }
+        ToolbarKey.HOME -> ToolbarTextButton("Home") { cb.onDispatchKey(0, VTERM_KEY_HOME) }
+        ToolbarKey.END -> ToolbarTextButton("End") { cb.onDispatchKey(0, VTERM_KEY_END) }
+        ToolbarKey.PGUP -> ToolbarTextButton("PgUp") { cb.onDispatchKey(0, VTERM_KEY_PAGEUP) }
+        ToolbarKey.PGDN -> ToolbarTextButton("PgDn") { cb.onDispatchKey(0, VTERM_KEY_PAGEDOWN) }
         else -> {
             val ch = key.char ?: return
             SymbolButton(key.label) {
-                sendChar(ch, ctrlActive, altActive, onSendBytes)
-                if (ctrlActive) onToggleCtrl()
-                if (altActive) onToggleAlt()
+                sendChar(ch, ctrlActive, altActive, cb.onSendBytes)
+                if (ctrlActive) cb.onToggleCtrl()
+                if (altActive) cb.onToggleAlt()
             }
         }
     }

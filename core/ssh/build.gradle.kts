@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":core:et"))
     implementation(project(":core:local"))
     implementation(project(":core:rdp"))
+    implementation(project(":core:smb"))
     implementation(project(":core:fido"))
     implementation(libs.bouncycastle)
     implementation(libs.coroutines.core)

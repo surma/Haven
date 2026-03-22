@@ -35,6 +35,7 @@ import sh.haven.core.ssh.SshClient
 import sh.haven.core.ssh.SshConnectionService
 import sh.haven.core.ssh.SshKeyExporter
 import sh.haven.core.ssh.SessionManager
+import sh.haven.core.ssh.SessionManagerRegistry
 import sh.haven.core.ssh.SshSessionManager
 import sh.haven.core.data.db.entities.KnownHost
 import sh.haven.core.mosh.MoshSessionManager
@@ -66,6 +67,7 @@ class ConnectionsViewModel @Inject constructor(
     private val smbSessionManager: SmbSessionManager,
     private val fidoAuthenticator: FidoAuthenticator,
     private val localSessionManager: LocalSessionManager,
+    private val sessionManagerRegistry: SessionManagerRegistry,
     private val sshKeyRepository: SshKeyRepository,
     private val preferencesRepository: UserPreferencesRepository,
     private val hostKeyVerifier: HostKeyVerifier,
@@ -434,13 +436,9 @@ class ConnectionsViewModel @Inject constructor(
 
     fun deleteConnection(id: String) {
         viewModelScope.launch {
-            sshSessionManager.removeAllSessionsForProfile(id)
-            reticulumSessionManager.removeAllSessionsForProfile(id)
-            moshSessionManager.removeAllSessionsForProfile(id)
-            etSessionManager.removeAllSessionsForProfile(id)
-            smbSessionManager.removeAllSessionsForProfile(id)
-            localSessionManager.removeAllSessionsForProfile(id)
+            sessionManagerRegistry.disconnectProfile(id)
             localSessionManager.prootManager.stopVncServer()
+            updateServiceNotification()
             repository.delete(id)
         }
     }
@@ -1711,24 +1709,15 @@ class ConnectionsViewModel @Inject constructor(
     )
 
     fun disconnect(profileId: String) {
-        sshSessionManager.removeAllSessionsForProfile(profileId)
-        reticulumSessionManager.removeAllSessionsForProfile(profileId)
-        moshSessionManager.removeAllSessionsForProfile(profileId)
-        etSessionManager.removeAllSessionsForProfile(profileId)
-        smbSessionManager.removeAllSessionsForProfile(profileId)
-        localSessionManager.removeAllSessionsForProfile(profileId)
+        sessionManagerRegistry.disconnectProfile(profileId)
         localSessionManager.prootManager.stopVncServer()
         updateServiceNotification()
     }
 
     private fun updateServiceNotification() {
-        if (sshSessionManager.hasActiveSessions || reticulumSessionManager.activeSessions.isNotEmpty() ||
-            moshSessionManager.activeSessions.isNotEmpty() || etSessionManager.activeSessions.isNotEmpty() ||
-            localSessionManager.activeSessions.isNotEmpty()) {
-            // Re-start the service to refresh the notification count
+        if (sessionManagerRegistry.hasActiveSessions()) {
             startForegroundServiceIfNeeded()
         } else {
-            // No more sessions — stop the foreground service
             val intent = Intent(appContext, SshConnectionService::class.java)
             appContext.stopService(intent)
         }

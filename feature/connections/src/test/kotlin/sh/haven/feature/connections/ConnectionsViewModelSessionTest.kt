@@ -28,7 +28,9 @@ import sh.haven.core.mosh.MoshSessionManager
 import sh.haven.core.reticulum.ReticulumBridge
 import sh.haven.core.reticulum.ReticulumSessionManager
 import sh.haven.core.smb.SmbSessionManager
+import sh.haven.core.rdp.RdpSessionManager
 import sh.haven.core.ssh.HostKeyVerifier
+import sh.haven.core.ssh.SessionManagerRegistry
 import sh.haven.core.ssh.SshSessionManager
 
 /**
@@ -49,7 +51,9 @@ class ConnectionsViewModelSessionTest {
     private lateinit var etSessionManager: EtSessionManager
     private lateinit var smbSessionManager: SmbSessionManager
     private lateinit var localSessionManager: LocalSessionManager
+    private lateinit var rdpSessionManager: RdpSessionManager
     private lateinit var prootManager: ProotManager
+    private lateinit var sessionManagerRegistry: SessionManagerRegistry
     private lateinit var viewModel: ConnectionsViewModel
 
     @Before
@@ -86,6 +90,19 @@ class ConnectionsViewModelSessionTest {
             every { activeSessions } returns emptyList()
             every { prootManager } returns this@ConnectionsViewModelSessionTest.prootManager
         }
+        rdpSessionManager = mockk(relaxed = true) {
+            every { sessions } returns MutableStateFlow(emptyMap())
+            every { activeSessions } returns emptyList()
+        }
+        sessionManagerRegistry = SessionManagerRegistry(
+            ssh = sshSessionManager,
+            reticulum = reticulumSessionManager,
+            mosh = moshSessionManager,
+            et = etSessionManager,
+            smb = smbSessionManager,
+            local = localSessionManager,
+            rdp = rdpSessionManager,
+        )
 
         viewModel = ConnectionsViewModel(
             appContext = appContext,
@@ -99,6 +116,7 @@ class ConnectionsViewModelSessionTest {
             smbSessionManager = smbSessionManager,
             fidoAuthenticator = mockk(relaxed = true),
             localSessionManager = localSessionManager,
+            sessionManagerRegistry = sessionManagerRegistry,
             sshKeyRepository = mockk(relaxed = true) {
                 every { observeAll() } returns flowOf(emptyList())
             },
