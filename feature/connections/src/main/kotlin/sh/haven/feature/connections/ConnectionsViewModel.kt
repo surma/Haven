@@ -578,6 +578,17 @@ class ConnectionsViewModel @Inject constructor(
             _connectingProfileId.value = profile.id
             _error.value = null
 
+            // If proot binary is available but rootfs isn't installed, download it first
+            val prootManager = localSessionManager.prootManager
+            if (prootManager.prootBinary != null && !prootManager.isRootfsInstalled) {
+                Log.d(TAG, "PRoot available but rootfs not installed — downloading...")
+                prootManager.installRootfs()
+                if (prootManager.state.value is sh.haven.core.local.ProotManager.SetupState.Error) {
+                    val err = prootManager.state.value as sh.haven.core.local.ProotManager.SetupState.Error
+                    Log.w(TAG, "Rootfs install failed: ${err.message}, falling back to plain shell")
+                }
+            }
+
             val sessionId = localSessionManager.registerSession(profile.id, profile.label)
             try {
                 localSessionManager.connectSession(sessionId)

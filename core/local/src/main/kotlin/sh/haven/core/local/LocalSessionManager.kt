@@ -21,6 +21,7 @@ private const val TAG = "LocalSessionManager"
 @Singleton
 class LocalSessionManager @Inject constructor(
     @ApplicationContext private val context: Context,
+    val prootManager: ProotManager,
 ) {
 
     data class SessionState(
@@ -77,11 +78,11 @@ class LocalSessionManager @Inject constructor(
      * Uses proot if a rootfs is installed, otherwise falls back to /system/bin/sh.
      */
     fun buildCommand(): Triple<String, Array<String>, Array<String>> {
-        val rootfsDir = context.filesDir.resolve("proot/rootfs/alpine")
-        val prootBinary = findProotBinary()
+        val prootBinary = prootManager.prootBinary
 
-        return if (prootBinary != null && rootfsDir.isDirectory) {
+        return if (prootBinary != null && prootManager.isRootfsInstalled) {
             // PRoot with Alpine rootfs
+            val rootfsDir = java.io.File(context.filesDir, "proot/rootfs/alpine")
             val cmd = prootBinary
             val args = arrayOf(
                 prootBinary,
@@ -101,6 +102,7 @@ class LocalSessionManager @Inject constructor(
                 "LANG=en_US.UTF-8",
                 "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
                 "SHELL=/bin/sh",
+                "PROOT_TMP_DIR=${context.cacheDir.absolutePath}",
             )
             Triple(cmd, args, env)
         } else {
@@ -117,19 +119,6 @@ class LocalSessionManager @Inject constructor(
             )
             Triple(cmd, args, env)
         }
-    }
-
-    private fun findProotBinary(): String? {
-        // Check nativeLibraryDir (bundled as libproot.so)
-        val nativeDir = context.applicationInfo.nativeLibraryDir
-        val prootInNative = java.io.File(nativeDir, "libproot.so")
-        if (prootInNative.canExecute()) return prootInNative.absolutePath
-
-        // Check app files dir (downloaded)
-        val prootInFiles = context.filesDir.resolve("proot/proot")
-        if (prootInFiles.canExecute()) return prootInFiles.absolutePath
-
-        return null
     }
 
     /**
