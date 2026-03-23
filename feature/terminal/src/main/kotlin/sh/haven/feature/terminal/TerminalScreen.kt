@@ -92,6 +92,7 @@ import org.connectbot.terminal.ModifierManager
 import org.connectbot.terminal.Terminal
 import sh.haven.core.data.preferences.ToolbarLayout
 import sh.haven.core.data.preferences.UserPreferencesRepository
+import sh.haven.core.ui.rememberHasExternalKeyboard
 
 /** Distinct colors for grouping tabs by connection profile. */
 private val TAB_GROUP_COLORS = listOf(
@@ -120,6 +121,7 @@ fun TerminalScreen(
     mouseInputEnabled: Boolean = true,
     terminalRightClick: Boolean = false,
     allowStandardKeyboard: Boolean = false,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onNavigateToConnections: () -> Unit = {},
     onNavigateToVnc: (host: String, port: Int, password: String?, sshForward: Boolean, sshSessionId: String?) -> Unit = { _, _, _, _, _ -> },
     onSelectionActiveChanged: (Boolean) -> Unit = {},
@@ -156,6 +158,8 @@ fun TerminalScreen(
             ?: android.graphics.Typeface.MONOSPACE
     }
     val view = LocalView.current
+    val hasExternalKeyboard = rememberHasExternalKeyboard()
+    val showExtraToolbar = !(hideExtraToolbarWithExternalKeyboard && hasExternalKeyboard)
 
     LaunchedEffect(navigateToConnections) {
         if (navigateToConnections) {
@@ -641,61 +645,63 @@ fun TerminalScreen(
 
                     }
 
-                    KeyboardToolbar(
-                        onSendBytes = { bytes -> activeTab.sendInput(bytes) },
-                        onDispatchKey = { mods, key -> activeTab.emulator?.dispatchKey(mods, key) },
-                        focusRequester = focusRequester,
-                        ctrlActive = ctrlActive,
-                        altActive = altActive,
-                        bracketPasteMode = isBracketPaste,
-                        layout = toolbarLayout,
-                        navBlockMode = navBlockMode,
-                        onToggleCtrl = viewModel::toggleCtrl,
-                        onToggleAlt = viewModel::toggleAlt,
-                        onVncTap = if (activeTab.transportType == "SSH") {{
-                            coroutineScope.launch {
-                                val info = viewModel.getActiveVncInfo() ?: return@launch
-                                if (info.stored) {
-                                    onNavigateToVnc(info.host, info.port, info.password, info.sshForward, info.sessionId)
-                                } else {
-                                    vncDialogInfo = info
-                                }
-                            }
-                        }} else if (activeTab.transportType == "LOCAL" && viewModel.isLocalDesktopInstalled) {{
-                            if (!localVncLoading) {
-                                localVncLoading = true
+                    if (showExtraToolbar) {
+                        KeyboardToolbar(
+                            onSendBytes = { bytes -> activeTab.sendInput(bytes) },
+                            onDispatchKey = { mods, key -> activeTab.emulator?.dispatchKey(mods, key) },
+                            focusRequester = focusRequester,
+                            ctrlActive = ctrlActive,
+                            altActive = altActive,
+                            bracketPasteMode = isBracketPaste,
+                            layout = toolbarLayout,
+                            navBlockMode = navBlockMode,
+                            onToggleCtrl = viewModel::toggleCtrl,
+                            onToggleAlt = viewModel::toggleAlt,
+                            onVncTap = if (activeTab.transportType == "SSH") {{
                                 coroutineScope.launch {
-                                    viewModel.ensureLocalVncProfile()
-                                    viewModel.startLocalVncServer()
-                                    kotlinx.coroutines.delay(4000)
-                                    val pwd = viewModel.getLocalVncPassword()
-                                    localVncLoading = false
-                                    onNavigateToVnc("localhost", 5901, pwd, false, null)
+                                    val info = viewModel.getActiveVncInfo() ?: return@launch
+                                    if (info.stored) {
+                                        onNavigateToVnc(info.host, info.port, info.password, info.sshForward, info.sessionId)
+                                    } else {
+                                        vncDialogInfo = info
+                                    }
                                 }
-                            }
-                        }} else null,
-                        vncLoading = localVncLoading,
-                        selectionController = selectionController,
-                        selectionActive = selectionActive,
-                        hyperlinkUri = currentHyperlinkUri,
-                        onPaste = { text -> activeTab.sendInput(text.toByteArray()) },
-                        reorderMode = reorderMode,
-                        onReorderModeChanged = {
-                            reorderMode = it
-                            onReorderModeChanged(it)
-                        },
-                        onToolbarLayoutChanged = onToolbarLayoutChanged,
-                        onOpenSettings = onOpenToolbarSettings,
-                        selectionContent = selectionController?.let { ctrl -> {
-                            SelectionToolbarContent(
-                                controller = ctrl,
-                                hyperlinkUri = currentHyperlinkUri,
-                                bracketPasteMode = isBracketPaste,
-                                onPaste = { text -> activeTab.sendInput(text.toByteArray()) },
-                            )
-                        } },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                            }} else if (activeTab.transportType == "LOCAL" && viewModel.isLocalDesktopInstalled) {{
+                                if (!localVncLoading) {
+                                    localVncLoading = true
+                                    coroutineScope.launch {
+                                        viewModel.ensureLocalVncProfile()
+                                        viewModel.startLocalVncServer()
+                                        kotlinx.coroutines.delay(4000)
+                                        val pwd = viewModel.getLocalVncPassword()
+                                        localVncLoading = false
+                                        onNavigateToVnc("localhost", 5901, pwd, false, null)
+                                    }
+                                }
+                            }} else null,
+                            vncLoading = localVncLoading,
+                            selectionController = selectionController,
+                            selectionActive = selectionActive,
+                            hyperlinkUri = currentHyperlinkUri,
+                            onPaste = { text -> activeTab.sendInput(text.toByteArray()) },
+                            reorderMode = reorderMode,
+                            onReorderModeChanged = {
+                                reorderMode = it
+                                onReorderModeChanged(it)
+                            },
+                            onToolbarLayoutChanged = onToolbarLayoutChanged,
+                            onOpenSettings = onOpenToolbarSettings,
+                            selectionContent = selectionController?.let { ctrl -> {
+                                SelectionToolbarContent(
+                                    controller = ctrl,
+                                    hyperlinkUri = currentHyperlinkUri,
+                                    bracketPasteMode = isBracketPaste,
+                                    onPaste = { text -> activeTab.sendInput(text.toByteArray()) },
+                                )
+                            } },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }

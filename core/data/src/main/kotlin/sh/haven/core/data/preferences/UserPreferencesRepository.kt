@@ -40,6 +40,8 @@ class UserPreferencesRepository @Inject constructor(
     private val mouseInputEnabledKey = booleanPreferencesKey("mouse_input_enabled")
     private val terminalRightClickKey = booleanPreferencesKey("terminal_right_click")
     private val allowStandardKeyboardKey = booleanPreferencesKey("allow_standard_keyboard")
+    private val hideExtraToolbarWithExternalKeyboardKey =
+        booleanPreferencesKey("hide_extra_toolbar_with_external_keyboard")
     private val reorderHintShownKey = booleanPreferencesKey("reorder_hint_shown")
     private val screenOrderKey = stringPreferencesKey("screen_order")
     private val waylandShellCommandKey = stringPreferencesKey("wayland_shell_command")
@@ -141,6 +143,17 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setAllowStandardKeyboard(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[allowStandardKeyboardKey] = enabled
+        }
+    }
+
+    /** Hide the extra key toolbar when a real external keyboard is connected. */
+    val hideExtraToolbarWithExternalKeyboard: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[hideExtraToolbarWithExternalKeyboardKey] ?: false
+    }
+
+    suspend fun setHideExtraToolbarWithExternalKeyboard(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[hideExtraToolbarWithExternalKeyboardKey] = enabled
         }
     }
 

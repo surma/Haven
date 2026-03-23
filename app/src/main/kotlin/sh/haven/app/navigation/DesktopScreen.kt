@@ -70,6 +70,7 @@ fun DesktopScreen(
     desktopViewModel: DesktopViewModel,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
     navBlockMode: NavBlockMode = NavBlockMode.ALIGNED,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onFullscreenChanged: (Boolean) -> Unit = {},
     onConnectedChanged: (Boolean) -> Unit = {},
 ) {
@@ -106,6 +107,7 @@ fun DesktopScreen(
                             frame = tab.frame,
                             error = tab.error,
                             toolbarLayout = toolbarLayout,
+                            hideExtraToolbarWithExternalKeyboard = hideExtraToolbarWithExternalKeyboard,
                             onTap = { x, y -> desktopViewModel.sendClick(x, y) },
                             onLongPress = { x, y -> desktopViewModel.sendClick(x, y, button = 3) },
                             onDragStart = { x, y ->
@@ -128,6 +130,7 @@ fun DesktopScreen(
                             frame = tab.frame,
                             error = tab.error,
                             toolbarLayout = toolbarLayout,
+                            hideExtraToolbarWithExternalKeyboard = hideExtraToolbarWithExternalKeyboard,
                             onTap = { x, y -> desktopViewModel.sendClick(x, y) },
                             onDragStart = { x, y ->
                                 desktopViewModel.sendPointer(x, y)

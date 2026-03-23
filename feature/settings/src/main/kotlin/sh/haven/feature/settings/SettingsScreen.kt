@@ -149,6 +149,7 @@ fun SettingsScreen(
     val mouseInputEnabled by viewModel.mouseInputEnabled.collectAsState()
     val terminalRightClick by viewModel.terminalRightClick.collectAsState()
     val allowStandardKeyboard by viewModel.allowStandardKeyboard.collectAsState()
+    val hideExtraToolbarWithExternalKeyboard by viewModel.hideExtraToolbarWithExternalKeyboard.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
     val waylandShellCommand by viewModel.waylandShellCommand.collectAsState()
     val mediaExtensions by viewModel.mediaExtensions.collectAsState()
@@ -316,6 +317,13 @@ fun SettingsScreen(
             title = stringResource(R.string.settings_toolbar_title),
             subtitle = stringResource(R.string.settings_toolbar_subtitle),
             onClick = { showToolbarConfigDialog = true },
+        )
+        SettingsToggleItem(
+            icon = Icons.Filled.KeyboardAlt,
+            title = "Hide extra toolbar with external keyboard",
+            subtitle = "When an external keyboard is connected, hide the Ctrl/Alt toolbar in Terminal, VNC, and RDP",
+            checked = hideExtraToolbarWithExternalKeyboard,
+            onCheckedChange = viewModel::setHideExtraToolbarWithExternalKeyboard,
         )
         SettingsToggleItem(
             icon = Icons.Filled.Search,

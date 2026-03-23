@@ -96,6 +96,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import sh.haven.core.data.preferences.ToolbarKey
 import sh.haven.core.data.preferences.ToolbarLayout
+import sh.haven.core.ui.rememberHasExternalKeyboard
 import kotlin.math.abs
 
 /**
@@ -109,6 +110,7 @@ fun RdpSessionContent(
     frame: StateFlow<Bitmap?>,
     error: StateFlow<String?>,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onTap: (Int, Int) -> Unit,
     onDragStart: (Int, Int) -> Unit,
     onDrag: (Int, Int) -> Unit,
@@ -162,6 +164,7 @@ fun RdpSessionContent(
             frame = frameState!!,
             fullscreen = fullscreen,
             toolbarLayout = toolbarLayout,
+            hideExtraToolbarWithExternalKeyboard = hideExtraToolbarWithExternalKeyboard,
             onTap = onTap,
             onDragStart = onDragStart,
             onDrag = onDrag,
@@ -195,6 +198,7 @@ fun RdpScreen(
     pendingSshSessionId: String? = null,
     pendingSshProfileId: String? = null,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onPendingConsumed: () -> Unit = {},
     onFullscreenChanged: (Boolean) -> Unit = {},
     viewModel: RdpViewModel = hiltViewModel(),
@@ -230,6 +234,7 @@ fun RdpScreen(
         frame = viewModel.frame,
         error = viewModel.error,
         toolbarLayout = toolbarLayout,
+        hideExtraToolbarWithExternalKeyboard = hideExtraToolbarWithExternalKeyboard,
         onTap = { x, y -> viewModel.sendClick(x, y) },
         onDragStart = { x, y ->
             viewModel.sendPointer(x, y)
@@ -292,6 +297,7 @@ private fun RdpViewer(
     frame: Bitmap,
     fullscreen: Boolean,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onTap: (Int, Int) -> Unit,
     onDragStart: (Int, Int) -> Unit,
     onDrag: (Int, Int) -> Unit,
@@ -322,6 +328,8 @@ private fun RdpViewer(
     var altActive by remember { mutableStateOf(false) }
     var shiftActive by remember { mutableStateOf(false) }
     var winActive by remember { mutableStateOf(false) }
+    val hasExternalKeyboard = rememberHasExternalKeyboard()
+    val showExtraToolbar = !(hideExtraToolbarWithExternalKeyboard && hasExternalKeyboard)
 
     // Fullscreen overlay toolbar
     var overlayVisible by remember { mutableStateOf(false) }
@@ -499,7 +507,7 @@ private fun RdpViewer(
         )
 
         // RDP key toolbar (hidden in fullscreen)
-        if (!fullscreen) {
+        if (!fullscreen && showExtraToolbar) {
             RdpKeyToolbar(
                 layout = toolbarLayout,
                 ctrlActive = ctrlActive,

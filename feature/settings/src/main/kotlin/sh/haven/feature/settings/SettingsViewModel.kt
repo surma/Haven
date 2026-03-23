@@ -134,6 +134,10 @@ class SettingsViewModel @Inject constructor(
     val allowStandardKeyboard: StateFlow<Boolean> = preferencesRepository.allowStandardKeyboard
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val hideExtraToolbarWithExternalKeyboard: StateFlow<Boolean> =
+        preferencesRepository.hideExtraToolbarWithExternalKeyboard
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val terminalFontSize: StateFlow<Int> = preferencesRepository.terminalFontSize
         .stateIn(
             viewModelScope,
@@ -278,6 +282,12 @@ class SettingsViewModel @Inject constructor(
     fun setAllowStandardKeyboard(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setAllowStandardKeyboard(enabled)
+        }
+    }
+
+    fun setHideExtraToolbarWithExternalKeyboard(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setHideExtraToolbarWithExternalKeyboard(enabled)
         }
     }
 
