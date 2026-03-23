@@ -100,6 +100,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import sh.haven.core.data.preferences.ToolbarKey
 import sh.haven.core.data.preferences.ToolbarLayout
+import sh.haven.core.ui.rememberHasExternalKeyboard
 import kotlin.math.abs
 
 @Composable
@@ -111,6 +112,7 @@ fun VncScreen(
     pendingSshForward: Boolean = false,
     pendingSshSessionId: String? = null,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onPendingConsumed: () -> Unit = {},
     onFullscreenChanged: (Boolean) -> Unit = {},
     viewModel: VncViewModel = hiltViewModel(),
@@ -177,6 +179,7 @@ fun VncScreen(
             frame = frame!!,
             fullscreen = fullscreen,
             toolbarLayout = toolbarLayout,
+            hideExtraToolbarWithExternalKeyboard = hideExtraToolbarWithExternalKeyboard,
             onTap = { x, y -> viewModel.sendClick(x, y) },
             onLongPress = { x, y -> viewModel.sendClick(x, y, button = 3) },
             onDragStart = { x, y ->
@@ -238,6 +241,7 @@ private fun VncViewer(
     frame: Bitmap,
     fullscreen: Boolean,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onTap: (Int, Int) -> Unit,
     onLongPress: (Int, Int) -> Unit,
     onDragStart: (Int, Int) -> Unit,
@@ -268,6 +272,8 @@ private fun VncViewer(
     var ctrlActive by remember { mutableStateOf(false) }
     var altActive by remember { mutableStateOf(false) }
     var shiftActive by remember { mutableStateOf(false) }
+    val hasExternalKeyboard = rememberHasExternalKeyboard()
+    val showExtraToolbar = !(hideExtraToolbarWithExternalKeyboard && hasExternalKeyboard)
 
     // Fullscreen overlay toolbar
     var overlayVisible by remember { mutableStateOf(false) }
@@ -482,7 +488,7 @@ private fun VncViewer(
         )
 
         // VNC key extension rows (hidden in fullscreen)
-        if (!fullscreen) {
+        if (!fullscreen && showExtraToolbar) {
             VncKeyToolbar(
                 layout = toolbarLayout,
                 ctrlActive = ctrlActive,

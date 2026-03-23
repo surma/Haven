@@ -96,6 +96,10 @@ class SettingsViewModel @Inject constructor(
     val mouseInputEnabled: StateFlow<Boolean> = preferencesRepository.mouseInputEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val hideExtraToolbarWithExternalKeyboard: StateFlow<Boolean> =
+        preferencesRepository.hideExtraToolbarWithExternalKeyboard
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val terminalFontSize: StateFlow<Int> = preferencesRepository.terminalFontSize
         .stateIn(
             viewModelScope,
@@ -200,6 +204,12 @@ class SettingsViewModel @Inject constructor(
     fun setMouseInputEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setMouseInputEnabled(enabled)
+        }
+    }
+
+    fun setHideExtraToolbarWithExternalKeyboard(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setHideExtraToolbarWithExternalKeyboard(enabled)
         }
     }
 

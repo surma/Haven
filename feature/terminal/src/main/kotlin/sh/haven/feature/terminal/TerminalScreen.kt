@@ -81,6 +81,7 @@ import org.connectbot.terminal.ModifierManager
 import org.connectbot.terminal.Terminal
 import sh.haven.core.data.preferences.ToolbarLayout
 import sh.haven.core.data.preferences.UserPreferencesRepository
+import sh.haven.core.ui.rememberHasExternalKeyboard
 
 /** Distinct colors for grouping tabs by connection profile. */
 private val TAB_GROUP_COLORS = listOf(
@@ -106,6 +107,7 @@ fun TerminalScreen(
     showSearchButton: Boolean = false,
     showCopyOutputButton: Boolean = false,
     mouseInputEnabled: Boolean = true,
+    hideExtraToolbarWithExternalKeyboard: Boolean = false,
     onNavigateToConnections: () -> Unit = {},
     onNavigateToVnc: (host: String, port: Int, password: String?, sshForward: Boolean, sshSessionId: String?) -> Unit = { _, _, _, _, _ -> },
     onSelectionActiveChanged: (Boolean) -> Unit = {},
@@ -128,6 +130,8 @@ fun TerminalScreen(
             ?: android.graphics.Typeface.MONOSPACE
     }
     val view = LocalView.current
+    val hasExternalKeyboard = rememberHasExternalKeyboard()
+    val showExtraToolbar = !(hideExtraToolbarWithExternalKeyboard && hasExternalKeyboard)
 
     LaunchedEffect(navigateToConnections) {
         if (navigateToConnections) {
@@ -472,32 +476,34 @@ fun TerminalScreen(
 
                     }
 
-                    KeyboardToolbar(
-                        onSendBytes = { bytes -> activeTab.sendInput(bytes) },
-                        onDispatchKey = { mods, key -> activeTab.emulator?.dispatchKey(mods, key) },
-                        focusRequester = focusRequester,
-                        ctrlActive = ctrlActive,
-                        altActive = altActive,
-                        bracketPasteMode = isBracketPaste,
-                        layout = toolbarLayout,
-                        onToggleCtrl = viewModel::toggleCtrl,
-                        onToggleAlt = viewModel::toggleAlt,
-                        onVncTap = if (activeTab.transportType == "SSH") {{
-                            coroutineScope.launch {
-                                val info = viewModel.getActiveVncInfo() ?: return@launch
-                                if (info.stored) {
-                                    onNavigateToVnc(info.host, info.port, info.password, info.sshForward, info.sessionId)
-                                } else {
-                                    vncDialogInfo = info
+                    if (showExtraToolbar) {
+                        KeyboardToolbar(
+                            onSendBytes = { bytes -> activeTab.sendInput(bytes) },
+                            onDispatchKey = { mods, key -> activeTab.emulator?.dispatchKey(mods, key) },
+                            focusRequester = focusRequester,
+                            ctrlActive = ctrlActive,
+                            altActive = altActive,
+                            bracketPasteMode = isBracketPaste,
+                            layout = toolbarLayout,
+                            onToggleCtrl = viewModel::toggleCtrl,
+                            onToggleAlt = viewModel::toggleAlt,
+                            onVncTap = if (activeTab.transportType == "SSH") {{
+                                coroutineScope.launch {
+                                    val info = viewModel.getActiveVncInfo() ?: return@launch
+                                    if (info.stored) {
+                                        onNavigateToVnc(info.host, info.port, info.password, info.sshForward, info.sessionId)
+                                    } else {
+                                        vncDialogInfo = info
+                                    }
                                 }
-                            }
-                        }} else null,
-                        selectionController = selectionController,
-                        selectionActive = selectionActive,
-                        hyperlinkUri = currentHyperlinkUri,
-                        onPaste = { text -> activeTab.sendInput(text.toByteArray()) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                            }} else null,
+                            selectionController = selectionController,
+                            selectionActive = selectionActive,
+                            hyperlinkUri = currentHyperlinkUri,
+                            onPaste = { text -> activeTab.sendInput(text.toByteArray()) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }

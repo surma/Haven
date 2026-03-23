@@ -36,6 +36,8 @@ class UserPreferencesRepository @Inject constructor(
     private val connectionLoggingEnabledKey = booleanPreferencesKey("connection_logging_enabled")
     private val verboseLoggingEnabledKey = booleanPreferencesKey("verbose_logging_enabled")
     private val mouseInputEnabledKey = booleanPreferencesKey("mouse_input_enabled")
+    private val hideExtraToolbarWithExternalKeyboardKey =
+        booleanPreferencesKey("hide_extra_toolbar_with_external_keyboard")
 
     val biometricEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[biometricEnabledKey] ?: false
@@ -104,6 +106,17 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setMouseInputEnabled(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[mouseInputEnabledKey] = enabled
+        }
+    }
+
+    /** Hide the extra key toolbar when a real external keyboard is connected. */
+    val hideExtraToolbarWithExternalKeyboard: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[hideExtraToolbarWithExternalKeyboardKey] ?: false
+    }
+
+    suspend fun setHideExtraToolbarWithExternalKeyboard(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[hideExtraToolbarWithExternalKeyboardKey] = enabled
         }
     }
 
