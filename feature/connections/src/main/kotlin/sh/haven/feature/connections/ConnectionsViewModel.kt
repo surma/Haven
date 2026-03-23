@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -79,6 +80,23 @@ class ConnectionsViewModel @Inject constructor(
 
     /** Verbose SSH log captured during connect, keyed by sessionId. Consumed by finishConnect. */
     private val pendingVerboseLogs = mutableMapOf<String, String>()
+
+    init {
+        // Stop foreground service when last session closes, regardless of how it was removed
+        // (close tab, network drop, etc.). Debounce prevents rapid start/stop cycling.
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        viewModelScope.launch {
+            combine(
+                sshSessionManager.sessions,
+                reticulumSessionManager.sessions,
+                moshSessionManager.sessions,
+                etSessionManager.sessions,
+                localSessionManager.sessions,
+            ) { flows -> flows }
+                .debounce(500L)
+                .collect { updateServiceNotification() }
+        }
+    }
 
     val connections: StateFlow<List<ConnectionProfile>> = repository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
