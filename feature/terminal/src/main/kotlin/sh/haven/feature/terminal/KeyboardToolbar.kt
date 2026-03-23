@@ -364,6 +364,7 @@ private const val VTERM_KEY_HOME = 11
 private const val VTERM_KEY_END = 12
 private const val VTERM_KEY_PAGEUP = 13
 private const val VTERM_KEY_PAGEDOWN = 14
+private const val VTERM_KEY_FUNCTION_0 = 256
 
 /** Render any toolbar item (non-nav keys in the left/right sections). */
 @Composable
@@ -490,6 +491,19 @@ private fun BuiltInKey(
         ToolbarKey.END -> ToolbarTextButton("End") { cb.onDispatchKey(0, VTERM_KEY_END) }
         ToolbarKey.PGUP -> ToolbarTextButton("PgUp") { cb.onDispatchKey(0, VTERM_KEY_PAGEUP) }
         ToolbarKey.PGDN -> ToolbarTextButton("PgDn") { cb.onDispatchKey(0, VTERM_KEY_PAGEDOWN) }
+        // F-keys — routed through dispatchKey so libvterm generates correct sequences
+        ToolbarKey.F1 -> ToolbarTextButton("F1") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 1) }
+        ToolbarKey.F2 -> ToolbarTextButton("F2") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 2) }
+        ToolbarKey.F3 -> ToolbarTextButton("F3") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 3) }
+        ToolbarKey.F4 -> ToolbarTextButton("F4") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 4) }
+        ToolbarKey.F5 -> ToolbarTextButton("F5") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 5) }
+        ToolbarKey.F6 -> ToolbarTextButton("F6") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 6) }
+        ToolbarKey.F7 -> ToolbarTextButton("F7") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 7) }
+        ToolbarKey.F8 -> ToolbarTextButton("F8") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 8) }
+        ToolbarKey.F9 -> ToolbarTextButton("F9") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 9) }
+        ToolbarKey.F10 -> ToolbarTextButton("F10") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 10) }
+        ToolbarKey.F11 -> ToolbarTextButton("F11") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 11) }
+        ToolbarKey.F12 -> ToolbarTextButton("F12") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 12) }
         else -> {
             val ch = key.char ?: return
             SymbolButton(key.label) {
