@@ -65,6 +65,24 @@ class BackupService @Inject constructor(
                 put("vncPassword", p.vncPassword ?: JSONObject.NULL)
                 put("vncSshForward", p.vncSshForward)
                 put("sessionManager", p.sessionManager ?: JSONObject.NULL)
+                put("useMosh", p.useMosh)
+                put("useEternalTerminal", p.useEternalTerminal)
+                put("etPort", p.etPort)
+                put("rdpPort", p.rdpPort)
+                put("rdpUsername", p.rdpUsername ?: JSONObject.NULL)
+                put("rdpDomain", p.rdpDomain ?: JSONObject.NULL)
+                put("rdpPassword", p.rdpPassword ?: JSONObject.NULL)
+                put("rdpSshForward", p.rdpSshForward)
+                put("rdpSshProfileId", p.rdpSshProfileId ?: JSONObject.NULL)
+                put("smbPort", p.smbPort)
+                put("smbShare", p.smbShare ?: JSONObject.NULL)
+                put("smbDomain", p.smbDomain ?: JSONObject.NULL)
+                put("smbPassword", p.smbPassword ?: JSONObject.NULL)
+                put("smbSshForward", p.smbSshForward)
+                put("smbSshProfileId", p.smbSshProfileId ?: JSONObject.NULL)
+                put("proxyType", p.proxyType ?: JSONObject.NULL)
+                put("proxyHost", p.proxyHost ?: JSONObject.NULL)
+                put("proxyPort", p.proxyPort)
             })
         }
         json.put("connections", connections)
@@ -198,6 +216,24 @@ class BackupService @Inject constructor(
                             vncPassword = c.optStringOrNull("vncPassword"),
                             vncSshForward = c.optBoolean("vncSshForward", true),
                             sessionManager = c.optStringOrNull("sessionManager"),
+                            useMosh = c.optBoolean("useMosh", false),
+                            useEternalTerminal = c.optBoolean("useEternalTerminal", false),
+                            etPort = c.optInt("etPort", 2022),
+                            rdpPort = c.optInt("rdpPort", 3389),
+                            rdpUsername = c.optStringOrNull("rdpUsername"),
+                            rdpDomain = c.optStringOrNull("rdpDomain"),
+                            rdpPassword = c.optStringOrNull("rdpPassword"),
+                            rdpSshForward = c.optBoolean("rdpSshForward", false),
+                            rdpSshProfileId = c.optStringOrNull("rdpSshProfileId"),
+                            smbPort = c.optInt("smbPort", 445),
+                            smbShare = c.optStringOrNull("smbShare"),
+                            smbDomain = c.optStringOrNull("smbDomain"),
+                            smbPassword = c.optStringOrNull("smbPassword"),
+                            smbSshForward = c.optBoolean("smbSshForward", false),
+                            smbSshProfileId = c.optStringOrNull("smbSshProfileId"),
+                            proxyType = c.optStringOrNull("proxyType"),
+                            proxyHost = c.optStringOrNull("proxyHost"),
+                            proxyPort = c.optInt("proxyPort", 1080),
                         ),
                     )
                     count++
