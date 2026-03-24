@@ -44,6 +44,7 @@ class UserPreferencesRepository @Inject constructor(
         booleanPreferencesKey("hide_extra_toolbar_with_external_keyboard")
     private val terminalTextSelectionEnabledByDefaultKey =
         booleanPreferencesKey("terminal_text_selection_enabled_by_default")
+    private val showTerminalTabBarKey = booleanPreferencesKey("show_terminal_tab_bar")
     private val reorderHintShownKey = booleanPreferencesKey("reorder_hint_shown")
     private val screenOrderKey = stringPreferencesKey("screen_order")
     private val waylandShellCommandKey = stringPreferencesKey("wayland_shell_command")
@@ -167,6 +168,17 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setTerminalTextSelectionEnabledByDefault(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[terminalTextSelectionEnabledByDefaultKey] = enabled
+        }
+    }
+
+    /** Whether the terminal session tab bar is shown above the terminal. */
+    val showTerminalTabBar: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[showTerminalTabBarKey] ?: true
+    }
+
+    suspend fun setShowTerminalTabBar(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[showTerminalTabBarKey] = enabled
         }
     }
 

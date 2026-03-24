@@ -141,6 +141,8 @@ fun HavenNavHost(
         .collectAsState(initial = false)
     val terminalTextSelectionEnabledByDefault by preferencesRepository.terminalTextSelectionEnabledByDefault
         .collectAsState(initial = true)
+    val showTerminalTabBar by preferencesRepository.showTerminalTabBar
+        .collectAsState(initial = true)
 
     // Profile ID to focus when navigating to terminal
     var pendingTerminalProfileId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -360,6 +362,7 @@ fun HavenNavHost(
                         allowStandardKeyboard = allowStandardKeyboard,
                         hideExtraToolbarWithExternalKeyboard = hideExtraToolbarWithExternalKeyboard,
                         terminalTextSelectionEnabledByDefault = terminalTextSelectionEnabledByDefault,
+                        showTabBar = showTerminalTabBar,
                         onNavigateToConnections = {
                             coroutineScope.launch {
                                 pagerState.animateScrollToPage(pageOf(Screen.Connections))

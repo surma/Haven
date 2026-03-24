@@ -123,6 +123,7 @@ fun TerminalScreen(
     allowStandardKeyboard: Boolean = false,
     hideExtraToolbarWithExternalKeyboard: Boolean = false,
     terminalTextSelectionEnabledByDefault: Boolean = true,
+    showTabBar: Boolean = true,
     onNavigateToConnections: () -> Unit = {},
     onNavigateToVnc: (host: String, port: Int, password: String?, sshForward: Boolean, sshSessionId: String?) -> Unit = { _, _, _, _, _ -> },
     onSelectionActiveChanged: (Boolean) -> Unit = {},
@@ -264,7 +265,8 @@ fun TerminalScreen(
             val clampedIndex = activeTabIndex.coerceIn(0, tabs.size - 1)
             val indicatorColor = profileColors[tabs.getOrNull(clampedIndex)?.profileId]
 
-            Surface(tonalElevation = 2.dp) {
+            if (showTabBar) {
+                Surface(tonalElevation = 2.dp) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -468,6 +470,7 @@ fun TerminalScreen(
                         }
                     }
                 }
+            }
             }
 
             // Terminal area

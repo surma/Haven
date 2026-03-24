@@ -152,6 +152,7 @@ fun SettingsScreen(
     val allowStandardKeyboard by viewModel.allowStandardKeyboard.collectAsState()
     val hideExtraToolbarWithExternalKeyboard by viewModel.hideExtraToolbarWithExternalKeyboard.collectAsState()
     val terminalTextSelectionEnabledByDefault by viewModel.terminalTextSelectionEnabledByDefault.collectAsState()
+    val showTerminalTabBar by viewModel.showTerminalTabBar.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
     val waylandShellCommand by viewModel.waylandShellCommand.collectAsState()
     val mediaExtensions by viewModel.mediaExtensions.collectAsState()
@@ -333,6 +334,13 @@ fun SettingsScreen(
             subtitle = "When off, long-press selection starts disabled and can be turned on with the corner checkbox",
             checked = terminalTextSelectionEnabledByDefault,
             onCheckedChange = viewModel::setTerminalTextSelectionEnabledByDefault,
+        )
+        SettingsToggleItem(
+            icon = Icons.Filled.ListAlt,
+            title = "Show terminal tab bar",
+            subtitle = "Show session tabs above the terminal",
+            checked = showTerminalTabBar,
+            onCheckedChange = viewModel::setShowTerminalTabBar,
         )
         SettingsToggleItem(
             icon = Icons.Filled.Search,
