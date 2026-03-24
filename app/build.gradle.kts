@@ -15,8 +15,8 @@ android {
         applicationId = "sh.haven.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 112
-        versionName = "3.13.0"
+        versionCode = 113
+        versionName = "3.13.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
