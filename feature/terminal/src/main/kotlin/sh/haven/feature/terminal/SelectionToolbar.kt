@@ -320,6 +320,8 @@ fun SelectionToolbarContent(
         SelectionIconButton(Icons.Filled.ContentCopy, "Copy") {
             val text = controller.copySelection()
             if (!text.isNullOrEmpty()) {
+                clipboardManager.setText(AnnotatedString(text))
+                controller.clearSelection()
                 Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
             }
         }
