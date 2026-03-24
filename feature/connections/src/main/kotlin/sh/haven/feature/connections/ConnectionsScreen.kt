@@ -649,8 +649,8 @@ fun ConnectionsScreen(
                 var draggedId by remember { mutableStateOf<String?>(null) }
                 var dragOffset by remember { mutableFloatStateOf(0f) }
                 val reorderedIds = remember { mutableStateListOf<String>() }
-                // Sync reorderedIds when the source list changes
-                val topLevelIds = topLevel.map { it.id }
+                // Sync reorderedIds from the full (unfiltered) list
+                val topLevelIds = allTopLevel.map { it.id }
                 if (reorderedIds.toList() != topLevelIds && draggedId == null) {
                     reorderedIds.clear()
                     reorderedIds.addAll(topLevelIds)
@@ -718,7 +718,9 @@ fun ConnectionsScreen(
                                                 val dist = nextInfo.offset - draggedInfo.offset
                                                 if (dragOffset > dist / 2) {
                                                     reorderedIds.add(fromIdx + 1, reorderedIds.removeAt(fromIdx))
-                                                    dragOffset -= dist
+                                                    // Reset offset to 0 after swap — avoids cascade
+                                                    // when asymmetric child counts change distances
+                                                    dragOffset = 0f
                                                 }
                                             }
                                         } else if (dragOffset < 0 && fromIdx > 0) {
@@ -727,7 +729,7 @@ fun ConnectionsScreen(
                                                 val dist = draggedInfo.offset - prevInfo.offset
                                                 if (dragOffset < -dist / 2) {
                                                     reorderedIds.add(fromIdx - 1, reorderedIds.removeAt(fromIdx))
-                                                    dragOffset += dist
+                                                    dragOffset = 0f
                                                 }
                                             }
                                         }
