@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://github.com/GlassOnTin/Haven/releases/latest">GitHub Releases</a> &bull;
-  <a href="https://f-droid.org">F-Droid</a>
+  <a href="https://f-droid.org/en/packages/sh.haven.app">F-Droid</a>
 </p>
 
 ---
@@ -82,7 +82,7 @@ Notifications appear as a toast in the foreground or as an Android notification 
 | Channel | |
 |---|---|
 | [GitHub Releases](https://github.com/GlassOnTin/Haven/releases/latest) | Free, signed APK |
-| [F-Droid](https://f-droid.org) | Free, built from source |
+| [F-Droid](https://f-droid.org/en/packages/sh.haven.app) | Free, built from source |
 
 ### Build from source
 
