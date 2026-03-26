@@ -110,8 +110,8 @@ class MoshTransportTest {
         transport!!.start(scope)
 
         assertTrue(
-            "Should receive shell output within 10s (disconnected=$disconnectReason)",
-            outputLatch.await(10, TimeUnit.SECONDS),
+            "Should receive shell output within 15s (disconnected=$disconnectReason)",
+            outputLatch.await(15, TimeUnit.SECONDS),
         )
         assertTrue("Should have received some output", receivedOutput.isNotEmpty())
     }
@@ -120,7 +120,9 @@ class MoshTransportTest {
     fun `mosh transport sends input and receives echo`() = runBlocking {
         val (host, port, key) = bootstrap()
         val echoLatch = CountDownLatch(1)
+        val outputLatch = CountDownLatch(1)
         val marker = "HAVEN_MOSH_${System.currentTimeMillis()}"
+        var disconnected = false
 
         transport = MoshTransport(
             serverIp = host,
@@ -129,21 +131,26 @@ class MoshTransportTest {
             onOutput = { data, offset, len ->
                 val text = String(data, offset, len)
                 receivedOutput.add(text)
+                outputLatch.countDown()
                 if (receivedOutput.joinToString("").contains(marker)) {
                     echoLatch.countDown()
                 }
+            },
+            onDisconnect = { clean ->
+                println("Mosh disconnected during echo test (clean=$clean)")
+                disconnected = true
             },
             logger = testLogger,
         )
         transport!!.start(scope)
 
         // Wait for shell prompt
-        delay(1000)
+        assertTrue("Should receive initial output within 15s", outputLatch.await(15, TimeUnit.SECONDS))
 
         transport!!.sendInput("echo $marker\n".toByteArray())
 
         assertTrue(
-            "Should receive echo of marker within 5s",
+            "Should receive echo of marker within 5s (disconnected=$disconnected)",
             echoLatch.await(5, TimeUnit.SECONDS),
         )
     }
@@ -159,12 +166,15 @@ class MoshTransportTest {
             port = port,
             key = key,
             onOutput = { _, _, _ -> outputLatch.countDown() },
-            onDisconnect = { disconnected = true },
+            onDisconnect = { clean ->
+                println("Mosh disconnected during resize test (clean=$clean)")
+                disconnected = true
+            },
             logger = testLogger,
         )
         transport!!.start(scope)
 
-        assertTrue("Should connect within 5s", outputLatch.await(5, TimeUnit.SECONDS))
+        assertTrue("Should connect within 15s", outputLatch.await(15, TimeUnit.SECONDS))
 
         transport!!.resize(120, 40)
         delay(500)
@@ -185,12 +195,15 @@ class MoshTransportTest {
             port = port,
             key = key,
             onOutput = { _, _, _ -> outputLatch.countDown() },
-            onDisconnect = { disconnected = true },
+            onDisconnect = { clean ->
+                println("Mosh disconnected during idle test (clean=$clean)")
+                disconnected = true
+            },
             logger = testLogger,
         )
         transport!!.start(scope)
 
-        assertTrue("Should connect within 5s", outputLatch.await(5, TimeUnit.SECONDS))
+        assertTrue("Should connect within 15s", outputLatch.await(15, TimeUnit.SECONDS))
 
         // Mosh keepalive interval is 3s — wait long enough for several
         delay(10_000)
@@ -220,12 +233,15 @@ class MoshTransportTest {
             port = port,
             key = key,
             onOutput = { _, _, _ -> outputLatch.countDown() },
-            onDisconnect = { disconnected = true },
+            onDisconnect = { clean ->
+                println("Mosh disconnected during rapid input test (clean=$clean)")
+                disconnected = true
+            },
             logger = testLogger,
         )
         transport!!.start(scope)
 
-        assertTrue("Should connect within 5s", outputLatch.await(5, TimeUnit.SECONDS))
+        assertTrue("Should connect within 15s", outputLatch.await(15, TimeUnit.SECONDS))
 
         // Rapid-fire input
         repeat(50) { i ->

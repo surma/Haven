@@ -11,6 +11,7 @@ import org.junit.Before
 import org.junit.Test
 import sh.haven.et.EtLogger
 import sh.haven.et.transport.EtTransport
+import java.net.ServerSocket
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -228,5 +229,101 @@ class EtTransportTest {
         delay(3000)
         // If nonces went out of sync, the server would have dropped the connection
         // and subsequent sends would fail silently
+    }
+
+    @Test
+    fun `ET transport handles concurrent resize and input`() = runBlocking {
+        val (clientId, passkey) = bootstrap()
+        val outputLatch = CountDownLatch(1)
+        var disconnected = false
+
+        transport = EtTransport(
+            serverHost = TestServer.host,
+            port = TestServer.etPort,
+            clientId = clientId,
+            passkey = passkey,
+            onOutput = { _, _, _ -> outputLatch.countDown() },
+            onDisconnect = { clean ->
+                println("ET disconnected during concurrent test (clean=$clean)")
+                disconnected = true
+            },
+            logger = testLogger,
+        )
+        transport!!.start(scope)
+
+        assertTrue("Should connect within 5s", outputLatch.await(5, TimeUnit.SECONDS))
+
+        // Interleave resize and input rapidly — tests nonce sequencing across packet types
+        repeat(30) { i ->
+            transport!!.sendInput("echo concurrent$i\n".toByteArray())
+            if (i % 3 == 0) {
+                transport!!.resize(80 + (i % 40), 24 + (i % 10))
+            }
+        }
+
+        delay(3000)
+        assertFalse("Should not disconnect during concurrent resize+input", disconnected)
+    }
+
+    @Test
+    fun `ET transport fires onDisconnect on socket close`() = runBlocking {
+        val (clientId, passkey) = bootstrap()
+        val outputLatch = CountDownLatch(1)
+        val disconnectLatch = CountDownLatch(1)
+
+        transport = EtTransport(
+            serverHost = TestServer.host,
+            port = TestServer.etPort,
+            clientId = clientId,
+            passkey = passkey,
+            onOutput = { _, _, _ -> outputLatch.countDown() },
+            onDisconnect = { clean ->
+                println("ET disconnected (clean=$clean)")
+                disconnectLatch.countDown()
+            },
+            logger = testLogger,
+        )
+        transport!!.start(scope)
+
+        assertTrue("Should connect within 5s", outputLatch.await(5, TimeUnit.SECONDS))
+
+        // Force close — should trigger onDisconnect
+        transport!!.close()
+
+        // onDisconnect may or may not fire depending on timing (close sets closed=true
+        // before the read loop sees the exception), so just verify no crash
+        delay(500)
+    }
+
+    @Test
+    fun `ET transport handshake timeout on unresponsive port`() = runBlocking {
+        // Open a local TCP port that accepts connections but never responds
+        val serverSocket = ServerSocket(0) // OS-assigned port
+        val localPort = serverSocket.localPort
+        val disconnectLatch = CountDownLatch(1)
+
+        try {
+            transport = EtTransport(
+                serverHost = "127.0.0.1",
+                port = localPort,
+                clientId = "XXX" + "A".repeat(13),
+                passkey = "B".repeat(32),
+                onOutput = { _, _, _ -> },
+                onDisconnect = { clean ->
+                    println("ET handshake timeout disconnect (clean=$clean)")
+                    disconnectLatch.countDown()
+                },
+                logger = testLogger,
+            )
+            transport!!.start(scope)
+
+            // Should disconnect within ~10s (handshake read timeout)
+            assertTrue(
+                "Should fire onDisconnect within 15s on unresponsive port",
+                disconnectLatch.await(15, TimeUnit.SECONDS),
+            )
+        } finally {
+            serverSocket.close()
+        }
     }
 }

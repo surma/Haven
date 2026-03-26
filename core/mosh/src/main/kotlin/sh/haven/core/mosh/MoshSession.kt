@@ -35,6 +35,8 @@ class MoshSession(
     private val moshKey: String,
     private val onDataReceived: (ByteArray, Int, Int) -> Unit,
     private val onDisconnected: ((cleanExit: Boolean) -> Unit)? = null,
+    private val initialCols: Int = 80,
+    private val initialRows: Int = 24,
 ) : Closeable {
 
     @Volatile
@@ -66,6 +68,8 @@ class MoshSession(
                 }
             },
             logger = AndroidMoshLogger,
+            initialCols = initialCols,
+            initialRows = initialRows,
         )
         transport = t
         t.start(scope)
