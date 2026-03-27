@@ -31,7 +31,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install SDK platform 36, CMake, and NDK
-        run: sdkmanager "platforms;android-36" "cmake;3.31.6" "ndk;28.0.13004108"
+        run: sdkmanager "platforms;android-36" "cmake;3.31.6" "ndk;28.0.13004108" "ndk;27.0.12077973"
 
       - name: Cache Gradle packages
         uses: actions/cache@v5
