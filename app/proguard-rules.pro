@@ -23,6 +23,12 @@
 -keep class net.engio.** { *; }
 -dontwarn javax.el.**
 
+# Keep protobuf generated classes — protobuf-lite uses reflection on field names
+-keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
+-keep class * extends com.google.protobuf.GeneratedMessageLite$Builder { *; }
+-keep class sh.haven.mosh.proto.** { *; }
+-keep class sh.haven.et.protocol.** { *; }
+
 # Keep Hilt generated classes
 -keep class dagger.hilt.** { *; }
 -keep class javax.inject.** { *; }
