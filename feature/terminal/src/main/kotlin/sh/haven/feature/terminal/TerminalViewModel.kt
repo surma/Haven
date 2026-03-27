@@ -40,6 +40,38 @@ private const val TAG = "TerminalViewModel"
 private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
 /**
+ * Records terminal data to a file for replay/debugging.
+ *
+ * Format: sequential frames of [4-byte LE millis since start][4-byte LE length][data].
+ * Replay by reading frames and feeding to TerminalEmulator.writeInput().
+ */
+class TerminalRecorder(private val file: java.io.File) : java.io.Closeable {
+    private val startTime = System.currentTimeMillis()
+    private val out = java.io.BufferedOutputStream(file.outputStream())
+    private val buf = ByteArray(8) // reusable header buffer
+
+    @Synchronized
+    fun record(data: ByteArray, offset: Int, length: Int) {
+        val elapsed = (System.currentTimeMillis() - startTime).toInt()
+        buf[0] = (elapsed and 0xFF).toByte()
+        buf[1] = (elapsed ushr 8 and 0xFF).toByte()
+        buf[2] = (elapsed ushr 16 and 0xFF).toByte()
+        buf[3] = (elapsed ushr 24 and 0xFF).toByte()
+        buf[4] = (length and 0xFF).toByte()
+        buf[5] = (length ushr 8 and 0xFF).toByte()
+        buf[6] = (length ushr 16 and 0xFF).toByte()
+        buf[7] = (length ushr 24 and 0xFF).toByte()
+        out.write(buf)
+        out.write(data, offset, length)
+    }
+
+    @Synchronized
+    override fun close() {
+        try { out.flush(); out.close() } catch (_: Exception) {}
+    }
+}
+
+/**
  * Coalesces SSH/RNS data chunks into batched writes on the main thread.
  *
  * Without this, every onDataReceived callback posts a separate message to
@@ -47,7 +79,10 @@ private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
  * resize/layout events. This class accumulates bytes in a lock-protected
  * buffer and only keeps one pending main-thread drain in flight at a time.
  */
-private class EmulatorWriteBuffer(private val emulator: () -> TerminalEmulator?) {
+private class EmulatorWriteBuffer(
+    private val emulator: () -> TerminalEmulator?,
+    private val recorder: TerminalRecorder? = null,
+) {
     private val lock = Any()
     private var buffer = ByteArray(8192)
     private var length = 0
@@ -77,6 +112,7 @@ private class EmulatorWriteBuffer(private val emulator: () -> TerminalEmulator?)
             drainScheduled = false
         }
         if (copyLen > 0) {
+            recorder?.record(copy, 0, copyLen)
             emulator()?.writeInput(copy, 0, copyLen)
         }
     }
@@ -171,6 +207,7 @@ data class VncInfo(
 
 @HiltViewModel
 class TerminalViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val sessionManager: SshSessionManager,
     private val reticulumSessionManager: ReticulumSessionManager,
     private val moshSessionManager: MoshSessionManager,
@@ -181,8 +218,12 @@ class TerminalViewModel @Inject constructor(
     private val connectionRepository: sh.haven.core.data.repository.ConnectionRepository,
 ) : ViewModel() {
 
+    private val activeRecorders = mutableListOf<TerminalRecorder>()
+
     override fun onCleared() {
         super.onCleared()
+        activeRecorders.forEach { it.close() }
+        activeRecorders.clear()
         // Detach terminal sessions so they can be re-picked up by a new ViewModel.
         // This happens when the Activity is destroyed but the process stays alive
         // (foreground service keeps SSH connections open).
@@ -196,6 +237,18 @@ class TerminalViewModel @Inject constructor(
             }
         }
         trackedSessionIds.clear()
+    }
+
+    private fun createRecorderIfEnabled(sessionId: String): TerminalRecorder? {
+        val enabled = runBlocking(Dispatchers.IO) { preferencesRepository.verboseLoggingEnabled.first() }
+        if (!enabled) return null
+        val dir = java.io.File(appContext.filesDir, "terminal-recordings").apply { mkdirs() }
+        val ts = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val file = java.io.File(dir, "session-${ts}-${sessionId.take(8)}.bin")
+        Log.d(TAG, "Recording terminal data to ${file.absolutePath}")
+        val recorder = TerminalRecorder(file)
+        activeRecorders.add(recorder)
+        return recorder
     }
 
     val terminalColorScheme: StateFlow<UserPreferencesRepository.TerminalColorScheme> =
@@ -511,7 +564,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(baseLabel, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
-            val writeBuffer = EmulatorWriteBuffer { emulator }
+            val writeBuffer = EmulatorWriteBuffer({ emulator }, createRecorderIfEnabled(sessionId))
             val mouseTracker = MouseModeTracker()
             val oscHandler = OscHandler()
             val cwdFlow = MutableStateFlow<String?>(null)
@@ -591,7 +644,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(session.label, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
-            val rnsWriteBuffer = EmulatorWriteBuffer { emulator }
+            val rnsWriteBuffer = EmulatorWriteBuffer({ emulator }, createRecorderIfEnabled(sessionId))
             val rnsMouseTracker = MouseModeTracker()
             val rnsOscHandler = OscHandler()
             val rnsCwdFlow = MutableStateFlow<String?>(null)
@@ -662,7 +715,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(session.label, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
-            val moshWriteBuffer = EmulatorWriteBuffer { emulator }
+            val moshWriteBuffer = EmulatorWriteBuffer({ emulator }, createRecorderIfEnabled(sessionId))
             val moshMouseTracker = MouseModeTracker()
             val moshOscHandler = OscHandler()
             val moshCwdFlow = MutableStateFlow<String?>(null)
@@ -755,7 +808,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(session.label, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
-            val etWriteBuffer = EmulatorWriteBuffer { emulator }
+            val etWriteBuffer = EmulatorWriteBuffer({ emulator }, createRecorderIfEnabled(sessionId))
             val etMouseTracker = MouseModeTracker()
             val etOscHandler = OscHandler()
             val etCwdFlow = MutableStateFlow<String?>(null)
@@ -847,7 +900,7 @@ class TerminalViewModel @Inject constructor(
             val tabLabel = generateTabLabel(session.label, session.profileId, currentTabs)
 
             lateinit var emulator: TerminalEmulator
-            val localWriteBuffer = EmulatorWriteBuffer { emulator }
+            val localWriteBuffer = EmulatorWriteBuffer({ emulator }, createRecorderIfEnabled(sessionId))
             val localMouseTracker = MouseModeTracker()
             val localOscHandler = OscHandler()
             val localCwdFlow = MutableStateFlow<String?>(null)
