@@ -155,7 +155,12 @@ class ConnectionsViewModel @Inject constructor(
             val localMap = extra[1] as Map<String, LocalSessionManager.SessionState>
             val result = mutableMapOf<String, ProfileStatus>()
 
-            // SSH statuses
+            // Track which profiles have transport-specific sessions (Mosh/ET/RNS/Local).
+            // Their status takes precedence over the SSH infrastructure session
+            // (which stays CONNECTED for SFTP even after the transport disconnects).
+            val transportProfiles = mutableSetOf<String>()
+
+            // SSH statuses (base — may be overridden by transport-specific status)
             sshMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
                 val statuses = states.map { it.status }
                 result[profileId] = when {
@@ -169,50 +174,41 @@ class ConnectionsViewModel @Inject constructor(
 
             // Reticulum statuses
             rnsMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
+                transportProfiles.add(profileId)
                 val statuses = states.map { it.status }
-                val rnsStatus = when {
+                result[profileId] = when {
                     ReticulumSessionManager.SessionState.Status.CONNECTED in statuses -> ProfileStatus.CONNECTED
                     ReticulumSessionManager.SessionState.Status.CONNECTING in statuses -> ProfileStatus.CONNECTING
                     ReticulumSessionManager.SessionState.Status.ERROR in statuses -> ProfileStatus.ERROR
                     else -> ProfileStatus.DISCONNECTED
                 }
-                val existing = result[profileId]
-                if (existing == null || rnsStatus.ordinal < existing.ordinal) {
-                    result[profileId] = rnsStatus
-                }
             }
 
-            // Mosh statuses
+            // Mosh statuses (override SSH for this profile)
             moshMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
+                transportProfiles.add(profileId)
                 val statuses = states.map { it.status }
-                val moshStatus = when {
+                result[profileId] = when {
                     MoshSessionManager.SessionState.Status.CONNECTED in statuses -> ProfileStatus.CONNECTED
                     MoshSessionManager.SessionState.Status.CONNECTING in statuses -> ProfileStatus.CONNECTING
                     MoshSessionManager.SessionState.Status.ERROR in statuses -> ProfileStatus.ERROR
                     else -> ProfileStatus.DISCONNECTED
                 }
-                val existing = result[profileId]
-                if (existing == null || moshStatus.ordinal < existing.ordinal) {
-                    result[profileId] = moshStatus
-                }
             }
 
-            // ET statuses
+            // ET statuses (override SSH for this profile)
             etMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
+                transportProfiles.add(profileId)
                 val statuses = states.map { it.status }
-                val etStatus = when {
+                result[profileId] = when {
                     EtSessionManager.SessionState.Status.CONNECTED in statuses -> ProfileStatus.CONNECTED
                     EtSessionManager.SessionState.Status.CONNECTING in statuses -> ProfileStatus.CONNECTING
                     EtSessionManager.SessionState.Status.ERROR in statuses -> ProfileStatus.ERROR
                     else -> ProfileStatus.DISCONNECTED
                 }
-                val existing = result[profileId]
-                if (existing == null || etStatus.ordinal < existing.ordinal) {
-                    result[profileId] = etStatus
-                }
             }
 
-            // SMB statuses
+            // SMB statuses (merge — SMB coexists with SSH, doesn't replace it)
             smbMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
                 val statuses = states.map { it.status }
                 val smbStatus = when {
@@ -227,7 +223,7 @@ class ConnectionsViewModel @Inject constructor(
                 }
             }
 
-            // Local statuses
+            // Local statuses (merge)
             localMap.values.groupBy { it.profileId }.forEach { (profileId, states) ->
                 val statuses = states.map { it.status }
                 val localStatus = when {
