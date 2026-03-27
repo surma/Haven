@@ -16,9 +16,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GlassOnTin/Haven/releases/latest">GitHub Releases</a> &bull;
+  <a href="https://github.com/GlassOnTin/Haven/releases/latest"><strong>GitHub Releases (recommended)</strong></a> &bull;
   <a href="https://f-droid.org/en/packages/sh.haven.app">F-Droid</a>
 </p>
+
+> **GitHub release** = full build with all features including RDP.
+> **F-Droid** = FOSS build, excludes RDP (IronRDP library not FOSS-compatible).
+> SSH, Mosh, Eternal Terminal, VNC, and SFTP work in both.
 
 ---
 
