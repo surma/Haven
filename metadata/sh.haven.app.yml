@@ -12,11 +12,12 @@ Changelog: https://github.com/GlassOnTin/Haven/releases
 AutoName: Haven
 
 Description: |-
-  Haven is an open source SSH, VNC and SFTP client for Android.
+  Haven is an open source SSH, VNC, RDP and SFTP client for Android.
 
   Connect to your servers with a full terminal emulator, view remote desktops
-  over VNC, browse and transfer files over SFTP, and manage your SSH keys —
-  all from your phone.
+  over VNC or RDP, browse and transfer files over SFTP, and manage your SSH
+  keys — all from your phone. Supports Mosh, Eternal Terminal, and session
+  managers (tmux, screen, zellij).
 
 RepoType: git
 Repo: https://github.com/GlassOnTin/Haven.git

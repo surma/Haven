@@ -16,13 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GlassOnTin/Haven/releases/latest"><strong>GitHub Releases (recommended)</strong></a> &bull;
+  <a href="https://github.com/GlassOnTin/Haven/releases/latest">GitHub Releases</a> &bull;
   <a href="https://f-droid.org/en/packages/sh.haven.app">F-Droid</a>
 </p>
-
-> **GitHub release** = full build with all features including RDP.
-> **F-Droid** = FOSS build, excludes RDP (IronRDP library not FOSS-compatible).
-> SSH, Mosh, Eternal Terminal, VNC, and SFTP work in both.
 
 ---
 
@@ -83,16 +79,21 @@ Notifications appear as a toast in the foreground or as an Android notification 
 
 ## Install
 
-| Channel | | RDP |
-|---|---|---|
-| [GitHub Releases](https://github.com/GlassOnTin/Haven/releases/latest) | Full build, signed APK | Yes |
-| [F-Droid](https://f-droid.org/en/packages/sh.haven.app) | FOSS build, built from source | No |
+| Channel | |
+|---|---|
+| [GitHub Releases](https://github.com/GlassOnTin/Haven/releases/latest) | Signed APK, all features |
+| [F-Droid](https://f-droid.org/en/packages/sh.haven.app) | Built from source, all features |
 
-The **GitHub release** is the recommended install for most users. It includes all features including RDP (Remote Desktop). The **F-Droid build** excludes RDP (IronRDP library) to meet F-Droid's FOSS-only policy. SSH, Mosh, ET, VNC, and SFTP work in both builds.
+Both builds are identical — SSH, Mosh, Eternal Terminal, VNC, RDP, and SFTP. IronRDP (Rust) is built from source via `cargo-ndk`.
 
 ### Build from source
 
+Requires [Rust](https://rustup.rs/) with Android targets and `cargo-ndk`:
+
 ```bash
+rustup target add aarch64-linux-android x86_64-linux-android
+cargo install cargo-ndk
+
 git clone https://github.com/GlassOnTin/Haven.git
 cd Haven
 ./gradlew assembleDebug
