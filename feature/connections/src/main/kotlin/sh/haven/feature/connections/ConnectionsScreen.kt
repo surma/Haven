@@ -125,7 +125,6 @@ fun ConnectionsScreen(
     onNavigateToVnc: (host: String, port: Int, password: String?) -> Unit = { _, _, _ -> },
     onNavigateToRdp: (host: String, port: Int, username: String, password: String, domain: String, sshForward: Boolean, sshProfileId: String?, sshSessionId: String?, profileId: String?) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onNavigateToSmb: (profileId: String) -> Unit = {},
-    onNavigateToRclone: (profileId: String) -> Unit = {},
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val connections by viewModel.connections.collectAsState()
@@ -156,7 +155,6 @@ fun ConnectionsScreen(
     val navigateToVnc by viewModel.navigateToVnc.collectAsState()
     val navigateToRdp by viewModel.navigateToRdp.collectAsState()
     val navigateToSmb by viewModel.navigateToSmb.collectAsState()
-    val navigateToRclone by viewModel.navigateToRclone.collectAsState()
     val deploySuccess by viewModel.deploySuccess.collectAsState()
     val sessionSelection by viewModel.sessionSelection.collectAsState()
     val passwordFallback by viewModel.passwordFallback.collectAsState()
@@ -195,13 +193,6 @@ fun ConnectionsScreen(
     LaunchedEffect(navigateToSmb) {
         navigateToSmb?.let { profileId ->
             onNavigateToSmb(profileId)
-            viewModel.onNavigated()
-        }
-    }
-
-    LaunchedEffect(navigateToRclone) {
-        navigateToRclone?.let { profileId ->
-            onNavigateToRclone(profileId)
             viewModel.onNavigated()
         }
     }
