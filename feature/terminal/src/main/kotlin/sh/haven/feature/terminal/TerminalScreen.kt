@@ -38,6 +38,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -235,108 +241,147 @@ fun TerminalScreen(
             val clampedIndex = activeTabIndex.coerceIn(0, tabs.size - 1)
             val indicatorColor = profileColors[tabs.getOrNull(clampedIndex)?.profileId]
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-            PrimaryScrollableTabRow(
-                selectedTabIndex = clampedIndex,
-                modifier = Modifier.weight(1f),
-                edgePadding = 8.dp,
-                indicator = {
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(clampedIndex),
-                        color = indicatorColor ?: MaterialTheme.colorScheme.primary,
-                    )
-                },
-            ) {
-
-                tabs.forEachIndexed { index, tab ->
-                    val reconnecting by tab.isReconnecting.collectAsState()
-                    Tab(
-                        selected = activeTabIndex == index,
-                        onClick = { viewModel.selectTab(index) },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                profileColors[tab.profileId]?.let { color ->
-                                    Box(
-                                        modifier = Modifier
-                                            .width(4.dp)
-                                            .height(16.dp)
-                                            .background(color, CircleShape),
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                }
-                                if (reconnecting) {
-                                    Icon(
-                                        Icons.Filled.Autorenew,
-                                        contentDescription = "Reconnecting",
-                                        modifier = Modifier.size(14.dp),
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                                Text(tab.label, maxLines = 1)
-                                IconButton(
-                                    onClick = { viewModel.closeTab(tab.sessionId) },
-                                    modifier = Modifier.size(20.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Close,
-                                        contentDescription = "Close tab",
-                                        modifier = Modifier.size(14.dp),
-                                    )
-                                }
-                            }
-                        },
-                    )
-                }
-            } // PrimaryScrollableTabRow
-                // New tab button — separated from tab close buttons
-                IconButton(
-                    onClick = { viewModel.addTab() },
-                    enabled = !newTabLoading,
-                    modifier = Modifier.size(36.dp),
+            Surface(tonalElevation = 2.dp) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = "New tab",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                if (showCopyOutputButton) {
-                    IconButton(
-                        onClick = {
-                            val output = viewModel.copyLastCommandOutput()
-                            if (output != null) {
-                                val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clip.setPrimaryClip(ClipData.newPlainText("command output", output))
-                                android.widget.Toast.makeText(context, "Copied output (${output.length} chars)", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                android.widget.Toast.makeText(context, "No command output found (needs shell integration)", android.widget.Toast.LENGTH_SHORT).show()
+                    tabs.forEachIndexed { index, tab ->
+                        val reconnecting by tab.isReconnecting.collectAsState()
+                        val selected = activeTabIndex == index
+                        var showTabMenu by remember { mutableStateOf(false) }
+                        val tabColor = profileColors[tab.profileId]
+
+                        Box {
+                            Surface(
+                                modifier = Modifier
+                                    .padding(horizontal = 2.dp)
+                                    .combinedClickable(
+                                        onClick = { viewModel.selectTab(index) },
+                                        onLongClick = { showTabMenu = true },
+                                    ),
+                                shape = MaterialTheme.shapes.small,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                },
+                                tonalElevation = if (selected) 4.dp else 0.dp,
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 8.dp,
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    tabColor?.let { color ->
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(16.dp)
+                                                .background(color, CircleShape),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                    }
+                                    if (reconnecting) {
+                                        Icon(
+                                            Icons.Filled.Autorenew,
+                                            contentDescription = "Reconnecting",
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                    Text(
+                                        tab.label,
+                                        maxLines = 1,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
                             }
-                        },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.ContentCopy,
-                            contentDescription = "Copy last output",
-                            modifier = Modifier.size(18.dp),
-                        )
+                            // Long-press action bar
+                            DropdownMenu(
+                                expanded = showTabMenu,
+                                onDismissRequest = { showTabMenu = false },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    TextButton(
+                                        onClick = {
+                                            showTabMenu = false
+                                            viewModel.addTab()
+                                        },
+                                    ) {
+                                        Icon(Icons.Filled.Add, null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Sessions")
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            showTabMenu = false
+                                            viewModel.closeTab(tab.sessionId)
+                                        },
+                                        colors = ButtonDefaults.textButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error,
+                                        ),
+                                    ) {
+                                        Text("Close")
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(Icons.Filled.Close, null, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Action buttons after tabs
+                    if (showCopyOutputButton) {
+                        IconButton(
+                            onClick = {
+                                val output = viewModel.copyLastCommandOutput()
+                                if (output != null) {
+                                    val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clip.setPrimaryClip(ClipData.newPlainText("command output", output))
+                                    android.widget.Toast.makeText(context, "Copied output (${output.length} chars)", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "No command output found (needs shell integration)", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.ContentCopy,
+                                contentDescription = "Copy last output",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    if (showSearchButton) {
+                        IconButton(
+                            onClick = { viewModel.sendSearchKeys() },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Search,
+                                contentDescription = "Search",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                 }
-                if (showSearchButton) {
-                    IconButton(
-                        onClick = { viewModel.sendSearchKeys() },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Search,
-                            contentDescription = "Search",
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            } // Row
+            }
 
             // Terminal area
             val activeTab = tabs.getOrNull(activeTabIndex)

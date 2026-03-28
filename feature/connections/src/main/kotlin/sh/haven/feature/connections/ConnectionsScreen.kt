@@ -1173,7 +1173,7 @@ private fun ConnectionTreeItem(
             }
             if (profile.isSsh && profileStatus == ProfileStatus.CONNECTED) {
                 DropdownMenuItem(
-                    text = { Text("New Session") },
+                    text = { Text("Sessions") },
                     leadingIcon = { Icon(Icons.Filled.Add, null) },
                     onClick = { showMenu = false; onNewSession() },
                 )
