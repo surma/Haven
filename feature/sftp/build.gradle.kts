@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":core:et"))
     implementation(project(":core:data"))
     implementation(project(":core:smb"))
+    implementation(project(":core:rclone"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

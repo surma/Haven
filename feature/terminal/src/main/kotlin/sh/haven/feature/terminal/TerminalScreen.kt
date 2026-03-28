@@ -40,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -265,9 +266,23 @@ fun TerminalScreen(
                                     ),
                                 shape = MaterialTheme.shapes.small,
                                 color = if (selected) {
-                                    MaterialTheme.colorScheme.secondaryContainer
+                                    tabColor?.copy(alpha = 0.55f)
+                                        ?: MaterialTheme.colorScheme.secondaryContainer
                                 } else {
-                                    MaterialTheme.colorScheme.surface
+                                    tabColor?.copy(alpha = 0.25f)
+                                        ?: MaterialTheme.colorScheme.surface
+                                },
+                                contentColor = run {
+                                    val bg = tabColor ?: return@run if (selected) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                    val alpha = if (selected) 0.55f else 0.25f
+                                    // Blend tab color over surface to get effective luminance
+                                    val surfaceLum = MaterialTheme.colorScheme.surface.luminance()
+                                    val effectiveLum = surfaceLum * (1 - alpha) + bg.luminance() * alpha
+                                    if (effectiveLum > 0.5f) Color.Black else Color.White
                                 },
                                 tonalElevation = if (selected) 4.dp else 0.dp,
                             ) {
@@ -278,15 +293,6 @@ fun TerminalScreen(
                                     ),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    tabColor?.let { color ->
-                                        Box(
-                                            modifier = Modifier
-                                                .width(4.dp)
-                                                .height(16.dp)
-                                                .background(color, CircleShape),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                    }
                                     if (reconnecting) {
                                         Icon(
                                             Icons.Filled.Autorenew,
@@ -299,11 +305,6 @@ fun TerminalScreen(
                                         tab.label,
                                         maxLines = 1,
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = if (selected) {
-                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
                                     )
                                 }
                             }
