@@ -62,7 +62,10 @@ class ProotManager @Inject constructor(
         get() = prootBinary != null && isRootfsInstalled
 
     val isDesktopInstalled: Boolean
-        get() = File(rootfsDir, "usr/bin/Xvnc").exists() && installedDesktop != null
+        get() {
+            val de = installedDesktop ?: return false
+            return File(rootfsDir, de.verifyBinary).exists()
+        }
 
     enum class DesktopEnvironment(
         val label: String,
@@ -70,6 +73,7 @@ class ProotManager @Inject constructor(
         val verifyBinary: String,
         val startCommands: String,
         val sizeEstimate: String,
+        val isWayland: Boolean = false,
     ) {
         XFCE4(
             label = "Xfce4",
@@ -84,6 +88,26 @@ class ProotManager @Inject constructor(
             verifyBinary = "usr/bin/openbox",
             startCommands = "xsetroot -solid '#2e3440'; openbox & xterm &",
             sizeEstimate = "~10MB",
+        ),
+        LABWC(
+            label = "Labwc (Wayland)",
+            packages = "labwc wayvnc foot font-noto",
+            verifyBinary = "usr/bin/labwc",
+            startCommands = "export XDG_RUNTIME_DIR=/tmp/xdg-runtime; " +
+                "mkdir -p \$XDG_RUNTIME_DIR; " +
+                "rm -f \$XDG_RUNTIME_DIR/wayland-0 \$XDG_RUNTIME_DIR/wayland-0.lock; " +
+                "export WLR_BACKENDS=headless; " +
+                "export WLR_RENDERER=pixman; " +
+                "export WLR_LIBINPUT_NO_DEVICES=1; " +
+                "export WLR_SHM_DIR=/tmp; " +
+                "export LIBSEAT_BACKEND=noop; " +
+                "labwc 2>&1 & " +
+                "i=0; while [ ! -e \$XDG_RUNTIME_DIR/wayland-0 ] && [ \$i -lt 10 ]; do sleep 1; i=\$((i+1)); done; " +
+                "export WAYLAND_DISPLAY=wayland-0; " +
+                "wayvnc 0.0.0.0 5901 2>&1 & " +
+                "foot 2>&1 &",
+            sizeEstimate = "~15MB",
+            isWayland = true,
         ),
     }
 
@@ -430,8 +454,7 @@ class ProotManager @Inject constructor(
 
             // Check if key binaries were installed — apk may return exit 1 for
             // non-fatal trigger errors (gtk icon cache, fontscale, etc.)
-            val checkInstalled = File(rootfsDir, "usr/bin/Xvnc").exists() &&
-                File(rootfsDir, de.verifyBinary).exists()
+            val checkInstalled = File(rootfsDir, de.verifyBinary).exists()
             if (!checkInstalled) {
                 _desktopState.value = DesktopSetupState.Error(
                     "Package install failed: ${installOutput.takeLast(300)}"
@@ -445,31 +468,33 @@ class ProotManager @Inject constructor(
             Log.d(TAG, "${de.label} packages installed")
             }
 
-            _desktopState.value = DesktopSetupState.Installing("Configuring VNC...")
+            if (!de.isWayland) {
+                _desktopState.value = DesktopSetupState.Installing("Configuring VNC...")
 
-            // Write VNC password
-            runCommandInProot("mkdir -p /root/.vnc")
-            if (vncPassword.isNotEmpty()) {
-                val (pwdOut, pwdExit) = runCommandInProot(
-                    "echo '$vncPassword' | vncpasswd -f > /root/.vnc/passwd && chmod 600 /root/.vnc/passwd"
-                )
-                Log.d(TAG, "vncpasswd exit=$pwdExit output=$pwdOut")
-                val passwdFile = File(rootfsDir, "root/.vnc/passwd")
-                Log.d(TAG, "passwd file exists=${passwdFile.exists()} size=${passwdFile.length()}")
-            } else {
-                // No password — remove any existing passwd file so server uses None
-                File(rootfsDir, "root/.vnc/passwd").delete()
-                Log.d(TAG, "No VNC password set, using SecurityTypes None")
-            }
+                // Write VNC password
+                runCommandInProot("mkdir -p /root/.vnc")
+                if (vncPassword.isNotEmpty()) {
+                    val (pwdOut, pwdExit) = runCommandInProot(
+                        "echo '$vncPassword' | vncpasswd -f > /root/.vnc/passwd && chmod 600 /root/.vnc/passwd"
+                    )
+                    Log.d(TAG, "vncpasswd exit=$pwdExit output=$pwdOut")
+                    val passwdFile = File(rootfsDir, "root/.vnc/passwd")
+                    Log.d(TAG, "passwd file exists=${passwdFile.exists()} size=${passwdFile.length()}")
+                } else {
+                    // No password — remove any existing passwd file so server uses None
+                    File(rootfsDir, "root/.vnc/passwd").delete()
+                    Log.d(TAG, "No VNC password set, using SecurityTypes None")
+                }
 
-            // Write xstartup
-            runCommandInProot("""cat > /root/.vnc/xstartup << 'XEOF'
+                // Write xstartup
+                runCommandInProot("""cat > /root/.vnc/xstartup << 'XEOF'
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 exec startxfce4
 XEOF
 chmod +x /root/.vnc/xstartup""")
+            }
 
             Log.d(TAG, "Desktop setup complete")
             _desktopState.value = DesktopSetupState.Complete
@@ -493,36 +518,31 @@ chmod +x /root/.vnc/xstartup""")
 
         val prootBin = prootBinary ?: return
         val loaderPath = File(context.applicationInfo.nativeLibraryDir, "libproot_loader.so").absolutePath
+        val de = installedDesktop ?: DesktopEnvironment.XFCE4
 
-        // Clean up stale lock files
-        File(context.cacheDir, ".X1-lock").delete()
-
-        // Ensure /root and session files exist on the host filesystem
-        // (PRoot's --link2symlink can't always create them inside the rootfs)
+        // Ensure /root exists on the host filesystem
         val rootHome = File(rootfsDir, "root")
         rootHome.mkdirs()
-        File(rootHome, ".ICEauthority").apply { if (!exists()) createNewFile() }
-        File(rootHome, ".Xauthority").apply { if (!exists()) createNewFile() }
 
-
-
-        // Use VncAuth if password file exists and has content, otherwise None
-        val passwdFile = File(rootfsDir, "root/.vnc/passwd")
-        val useAuth = passwdFile.exists() && passwdFile.length() >= 8
-        val securityArg = if (useAuth) {
-            "-SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd"
+        val shellCommand = if (de.isWayland) {
+            Log.d(TAG, "Starting Wayland desktop: ${de.label}")
+            // Wayland: labwc + wayvnc — no X11 lock files or Xvnc needed
+            "export HOME=/root; ${de.startCommands} wait"
         } else {
-            "-SecurityTypes None"
-        }
-        Log.d(TAG, "Starting Xvnc: useAuth=$useAuth passwdSize=${passwdFile.length()}")
+            // X11: Xvnc + traditional desktop environment
+            File(context.cacheDir, ".X1-lock").delete()
+            File(rootHome, ".ICEauthority").apply { if (!exists()) createNewFile() }
+            File(rootHome, ".Xauthority").apply { if (!exists()) createNewFile() }
 
-        val process = ProcessBuilder(
-            prootBin, "-0", "--link2symlink",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-b", "/sys",
-            "-b", "${context.cacheDir.absolutePath}:/tmp",
-            "-w", "/root",
-            "/bin/busybox", "sh", "-c",
+            val passwdFile = File(rootfsDir, "root/.vnc/passwd")
+            val useAuth = passwdFile.exists() && passwdFile.length() >= 8
+            val securityArg = if (useAuth) {
+                "-SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd"
+            } else {
+                "-SecurityTypes None"
+            }
+            Log.d(TAG, "Starting Xvnc: useAuth=$useAuth passwdSize=${passwdFile.length()}")
+
             "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 && " +
                 "Xvnc :1 -geometry 1280x720 " +
                 "$securityArg " +
@@ -531,9 +551,23 @@ chmod +x /root/.vnc/xstartup""")
                 "sleep 3; " +
                 "export DISPLAY=:1; " +
                 "export HOME=/root; " +
-                "${installedDesktop?.startCommands ?: DesktopEnvironment.XFCE4.startCommands} " +
-                "wait",
-        ).apply {
+                "${de.startCommands} " +
+                "wait"
+        }
+
+        val prootArgs = mutableListOf(
+            prootBin, "-0", "--link2symlink",
+            "-r", rootfsDir.absolutePath,
+            "-b", "/dev", "-b", "/proc", "-b", "/sys",
+            "-b", "${context.cacheDir.absolutePath}:/tmp",
+        )
+        prootArgs.addAll(listOf(
+            "-w", "/root",
+            "/bin/busybox", "sh", "-c",
+            shellCommand,
+        ))
+
+        val process = ProcessBuilder(prootArgs).apply {
             environment().apply {
                 put("HOME", "/root")
                 put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
@@ -546,14 +580,15 @@ chmod +x /root/.vnc/xstartup""")
         vncProcess = process
 
         // Log output on a background thread
+        val logPrefix = if (de.isWayland) "Wayland" else "Xvnc"
         Thread({
             try {
                 process.inputStream.bufferedReader().forEachLine { line ->
-                    Log.d(TAG, "Xvnc: $line")
+                    Log.d(TAG, "$logPrefix: $line")
                 }
             } catch (_: Exception) {}
-            Log.d(TAG, "VNC process exited: ${process.waitFor()}")
-        }, "vnc-server-log").apply { isDaemon = true }.start()
+            Log.d(TAG, "$logPrefix process exited: ${process.waitFor()}")
+        }, "desktop-server-log").apply { isDaemon = true }.start()
     }
 
     fun stopVncServer() {

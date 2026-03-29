@@ -1515,11 +1515,13 @@ private fun DesktopSetupDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (desktopState) {
                     is sh.haven.core.local.ProotManager.DesktopSetupState.Idle -> {
+                        val currentDe = deOptions[selectedDe]
                         Text(
-                            "Install a desktop environment and VNC server in the PRoot environment." +
-                                if (deOptions[selectedDe] == sh.haven.core.local.ProotManager.DesktopEnvironment.OPENBOX)
-                                    " Openbox is minimal — right-click the desktop for the app menu."
-                                else "",
+                            when {
+                                currentDe.isWayland -> "Install a Wayland compositor in the PRoot environment. Experimental — uses software rendering."
+                                currentDe == sh.haven.core.local.ProotManager.DesktopEnvironment.OPENBOX -> "Install a desktop environment and VNC server in the PRoot environment. Openbox is minimal — right-click the desktop for the app menu."
+                                else -> "Install a desktop environment and VNC server in the PRoot environment."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                         )
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -1533,13 +1535,15 @@ private fun DesktopSetupDialog(
                                 }
                             }
                         }
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            label = { Text("VNC Password") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        if (!currentDe.isWayland) {
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                label = { Text("VNC Password") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                     is sh.haven.core.local.ProotManager.DesktopSetupState.Installing -> {
                         Row(
