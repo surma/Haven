@@ -722,6 +722,7 @@ class SftpViewModel @Inject constructor(
 
     /** Shared counter for recursive copy progress. */
     private val pasteFileCount = java.util.concurrent.atomic.AtomicInteger(0)
+    private val pasteInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private fun updatePasteProgress(fileName: String) {
         val count = pasteFileCount.incrementAndGet()
@@ -751,6 +752,7 @@ class SftpViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _loading.value = true
+                pasteInProgress.set(true)
                 pasteFileCount.set(0)
                 _transferProgress.value = TransferProgress("Preparing...", 0, 0)
 
@@ -791,6 +793,7 @@ class SftpViewModel @Inject constructor(
                 Log.e(TAG, "Paste failed", e)
                 _error.value = "Paste failed: ${e.message}"
             } finally {
+                pasteInProgress.set(false)
                 _loading.value = false
                 _transferProgress.value = null
             }
@@ -948,7 +951,7 @@ class SftpViewModel @Inject constructor(
     private fun openSftpAndList(profileId: String, path: String) {
         viewModelScope.launch {
             try {
-                _loading.value = true
+                if (!pasteInProgress.get()) _loading.value = true
                 withContext(Dispatchers.IO) {
                     val channel = sessionManager.openSftpForProfile(profileId)
                         ?: openMoshSftpChannel(profileId)
@@ -963,7 +966,7 @@ class SftpViewModel @Inject constructor(
                 Log.e(TAG, "SFTP open failed", e)
                 _error.value = "SFTP failed: ${e.message}"
             } finally {
-                _loading.value = false
+                if (!pasteInProgress.get()) _loading.value = false
             }
         }
     }
@@ -971,7 +974,7 @@ class SftpViewModel @Inject constructor(
     private fun listDirectory(profileId: String, path: String) {
         viewModelScope.launch {
             try {
-                _loading.value = true
+                if (!pasteInProgress.get()) _loading.value = true
                 withContext(Dispatchers.IO) {
                     val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
                     loadEntries(channel, path)
@@ -980,7 +983,7 @@ class SftpViewModel @Inject constructor(
                 Log.e(TAG, "List directory failed", e)
                 _error.value = "Failed to list: ${e.message}"
             } finally {
-                _loading.value = false
+                if (!pasteInProgress.get()) _loading.value = false
             }
         }
     }
@@ -1058,7 +1061,7 @@ class SftpViewModel @Inject constructor(
     private fun openSmbAndList(profileId: String) {
         viewModelScope.launch {
             try {
-                _loading.value = true
+                if (!pasteInProgress.get()) _loading.value = true
                 withContext(Dispatchers.IO) {
                     val client = smbSessionManager.getClientForProfile(profileId)
                         ?: throw IllegalStateException("SMB session not connected")
@@ -1078,7 +1081,7 @@ class SftpViewModel @Inject constructor(
     private fun listSmbDirectory(path: String) {
         viewModelScope.launch {
             try {
-                _loading.value = true
+                if (!pasteInProgress.get()) _loading.value = true
                 withContext(Dispatchers.IO) {
                     val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
                     loadSmbEntries(client, path)
@@ -1087,7 +1090,7 @@ class SftpViewModel @Inject constructor(
                 Log.e(TAG, "SMB list directory failed", e)
                 _error.value = "Failed to list: ${e.message}"
             } finally {
-                _loading.value = false
+                if (!pasteInProgress.get()) _loading.value = false
             }
         }
     }
@@ -1113,7 +1116,7 @@ class SftpViewModel @Inject constructor(
     private fun openRcloneAndList(profileId: String) {
         viewModelScope.launch {
             try {
-                _loading.value = true
+                if (!pasteInProgress.get()) _loading.value = true
                 withContext(Dispatchers.IO) {
                     val remoteName = rcloneSessionManager.getRemoteNameForProfile(profileId)
                     Log.d(TAG, "openRcloneAndList: profileId=$profileId, remoteName=$remoteName, " +
@@ -1135,7 +1138,7 @@ class SftpViewModel @Inject constructor(
     private fun listRcloneDirectory(path: String) {
         viewModelScope.launch {
             try {
-                _loading.value = true
+                if (!pasteInProgress.get()) _loading.value = true
                 withContext(Dispatchers.IO) {
                     val remote = activeRcloneRemote ?: throw IllegalStateException("Rclone not connected")
                     loadRcloneEntries(remote, path)
@@ -1144,7 +1147,7 @@ class SftpViewModel @Inject constructor(
                 Log.e(TAG, "Rclone list directory failed", e)
                 _error.value = "Failed to list: ${e.message}"
             } finally {
-                _loading.value = false
+                if (!pasteInProgress.get()) _loading.value = false
             }
         }
     }
