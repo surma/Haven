@@ -60,13 +60,20 @@ fun HavenNavHost(
     preferencesRepository: UserPreferencesRepository,
     connectionRepository: ConnectionRepository,
 ) {
-    // Native Wayland desktop
+    // Native Wayland desktop — poll compositor state reactively
     var pendingWaylandDesktop by rememberSaveable { mutableStateOf(false) }
+    var waylandRunning by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingWaylandDesktop) {
+        while (true) {
+            waylandRunning = pendingWaylandDesktop ||
+                sh.haven.core.wayland.WaylandBridge.nativeIsRunning()
+            kotlinx.coroutines.delay(500)
+        }
+    }
 
     // Auto-hide tabs for protocols with no configured connections
     val connections by connectionRepository.observeAll()
         .collectAsState(initial = emptyList())
-    val waylandRunning = pendingWaylandDesktop || sh.haven.core.wayland.WaylandBridge.nativeIsRunning()
     val hasDesktopConnections = waylandRunning || connections.any { it.isVnc || it.isRdp || it.isLocal }
     val screenOrderPref by preferencesRepository.screenOrder
         .collectAsState(initial = emptyList())

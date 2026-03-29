@@ -112,7 +112,7 @@ class ProotManager @Inject constructor(
         ),
         WAYLAND_NATIVE(
             label = "Native Wayland",
-            packages = "foot font-noto",
+            packages = "foot font-noto xkeyboard-config",
             verifyBinary = "usr/bin/foot",
             startCommands = "", // compositor runs natively via WaylandBridge, not in PRoot
             sizeEstimate = "~5MB",
@@ -708,6 +708,7 @@ chmod +x /root/.vnc/xstartup""")
             "export HOME=/root; " +
                 "export XDG_RUNTIME_DIR=/tmp/xdg-runtime; " +
                 "export WAYLAND_DISPLAY=wayland-0; " +
+                "export WAYLAND_DEBUG=1; " +
                 "foot 2>&1 & " +
                 "wait",
         ).apply {
