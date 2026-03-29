@@ -29,6 +29,10 @@
 -keep class sh.haven.mosh.proto.** { *; }
 -keep class sh.haven.et.protocol.** { *; }
 
+# Keep gomobile/rclone bindings — JNI native methods and Go runtime
+-keep class go.** { *; }
+-keep class sh.haven.rclone.binding.** { *; }
+
 # Keep Hilt generated classes
 -keep class dagger.hilt.** { *; }
 -keep class javax.inject.** { *; }
