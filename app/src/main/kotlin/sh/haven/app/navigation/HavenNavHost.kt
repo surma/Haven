@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -125,6 +126,9 @@ fun HavenNavHost(
 
     // Rclone auto-connect params
     var pendingRcloneProfileId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Native Wayland desktop
+    var pendingWaylandDesktop by remember { mutableStateOf(false) }
 
     // RDP auto-connect params
     var pendingRdpHost by rememberSaveable { mutableStateOf<String?>(null) }
@@ -312,6 +316,12 @@ fun HavenNavHost(
                             pagerState.animateScrollToPage(pageOf(Screen.Sftp))
                         }
                     },
+                    onNavigateToWayland = {
+                        pendingWaylandDesktop = true
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pageOf(Screen.Desktop))
+                        }
+                    },
                 )
                 Screen.Terminal -> {
                     TerminalScreen(
@@ -369,7 +379,11 @@ fun HavenNavHost(
                         }
                     }
                 }
-                Screen.Desktop -> {
+                Screen.Desktop -> if (pendingWaylandDesktop) {
+                    sh.haven.core.wayland.WaylandDesktopView(
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
                     val consumePending = {
                         pendingVncHost = null
                         pendingVncPort = null

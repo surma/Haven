@@ -127,6 +127,7 @@ fun ConnectionsScreen(
     onNavigateToRdp: (host: String, port: Int, username: String, password: String, domain: String, sshForward: Boolean, sshProfileId: String?, sshSessionId: String?, profileId: String?) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onNavigateToSmb: (profileId: String) -> Unit = {},
     onNavigateToRclone: (profileId: String) -> Unit = {},
+    onNavigateToWayland: () -> Unit = {},
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val connections by viewModel.connections.collectAsState()
@@ -158,6 +159,7 @@ fun ConnectionsScreen(
     val navigateToRdp by viewModel.navigateToRdp.collectAsState()
     val navigateToSmb by viewModel.navigateToSmb.collectAsState()
     val navigateToRclone by viewModel.navigateToRclone.collectAsState()
+    val navigateToWayland by viewModel.navigateToWayland.collectAsState()
     val deploySuccess by viewModel.deploySuccess.collectAsState()
     val sessionSelection by viewModel.sessionSelection.collectAsState()
     val passwordFallback by viewModel.passwordFallback.collectAsState()
@@ -183,6 +185,13 @@ fun ConnectionsScreen(
         navigateToVnc?.let { nav ->
             onNavigateToVnc(nav.host, nav.port, nav.password)
             viewModel.onNavigated()
+        }
+    }
+
+    LaunchedEffect(navigateToWayland) {
+        if (navigateToWayland) {
+            onNavigateToWayland()
+            viewModel.consumeNavigateToWayland()
         }
     }
 

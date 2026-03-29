@@ -36,4 +36,13 @@ object WaylandBridge {
 
     /** Returns true if the compositor event loop is running. */
     external fun nativeIsRunning(): Boolean
+
+    /** Set the Android Surface for compositor output. Pass null to detach. */
+    external fun nativeSetSurface(surface: android.view.Surface?)
+
+    /** Send touch event. action: 0=DOWN, 1=UP, 2=MOVE. x,y: 0..1 normalized. */
+    external fun nativeSendTouch(action: Int, x: Float, y: Float)
+
+    /** Send key event. linuxKeyCode: evdev keycode. pressed: 1=down, 0=up. */
+    external fun nativeSendKey(linuxKeyCode: Int, pressed: Int)
 }

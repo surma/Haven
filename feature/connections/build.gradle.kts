@@ -40,6 +40,7 @@ dependencies {
     implementation(project(":core:rclone"))
     implementation(project(":core:fido"))
     implementation(project(":core:local"))
+    implementation(project(":core:wayland"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

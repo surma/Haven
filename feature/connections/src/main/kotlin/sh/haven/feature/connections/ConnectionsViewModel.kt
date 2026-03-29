@@ -323,6 +323,10 @@ class ConnectionsViewModel @Inject constructor(
     private val _navigateToVnc = MutableStateFlow<VncNavigation?>(null)
     val navigateToVnc: StateFlow<VncNavigation?> = _navigateToVnc.asStateFlow()
 
+    /** Emitted to navigate to the native Wayland desktop view. */
+    private val _navigateToWayland = MutableStateFlow(false)
+    val navigateToWayland: StateFlow<Boolean> = _navigateToWayland.asStateFlow()
+
     /** Emitted to navigate to RDP screen with connection params. */
     data class RdpNavigation(val host: String, val port: Int, val username: String, val password: String, val domain: String, val sshForward: Boolean = false, val sshProfileId: String? = null, val sshSessionId: String? = null, val profileId: String? = null)
     private val _navigateToRdp = MutableStateFlow<RdpNavigation?>(null)
@@ -862,32 +866,40 @@ class ConnectionsViewModel @Inject constructor(
                 }
                 Log.d(TAG, "VNC server start initiated")
 
-                // Create or update VNC connection profile
-                val existing = connections.value.find {
-                    it.isVnc && it.host == "localhost" && it.vncPort == 5901
-                }
-                val pwd = vncPassword.ifEmpty { null }
-                if (existing == null) {
-                    val vncProfile = ConnectionProfile(
-                        label = "${localProfile.label} Desktop",
-                        host = "localhost",
-                        port = 5901,
-                        username = "",
-                        connectionType = "VNC",
-                        vncPort = 5901,
-                        vncPassword = pwd,
-                        vncSshForward = false,
-                    )
-                    repository.save(vncProfile)
-                } else if (existing.vncPassword != pwd) {
-                    repository.save(existing.copy(vncPassword = pwd))
-                }
+                if (de.isNative) {
+                    // Native Wayland — no VNC needed
+                    delay(2000)
+                    _navigateToWayland.value = true
+                    prootManager.resetDesktopState()
+                    Log.d(TAG, "Navigating to native Wayland desktop")
+                } else {
+                    // Create or update VNC connection profile
+                    val existing = connections.value.find {
+                        it.isVnc && it.host == "localhost" && it.vncPort == 5901
+                    }
+                    val pwd = vncPassword.ifEmpty { null }
+                    if (existing == null) {
+                        val vncProfile = ConnectionProfile(
+                            label = "${localProfile.label} Desktop",
+                            host = "localhost",
+                            port = 5901,
+                            username = "",
+                            connectionType = "VNC",
+                            vncPort = 5901,
+                            vncPassword = pwd,
+                            vncSshForward = false,
+                        )
+                        repository.save(vncProfile)
+                    } else if (existing.vncPassword != pwd) {
+                        repository.save(existing.copy(vncPassword = pwd))
+                    }
 
-                // Give VNC server (3s) and Xfce4 time to start
-                delay(7000)
-                _navigateToVnc.value = VncNavigation("localhost", 5901, pwd)
-                prootManager.resetDesktopState()
-                Log.d(TAG, "Navigating to VNC localhost:5901")
+                    // Give VNC server (3s) and Xfce4 time to start
+                    delay(7000)
+                    _navigateToVnc.value = VncNavigation("localhost", 5901, pwd)
+                    prootManager.resetDesktopState()
+                    Log.d(TAG, "Navigating to VNC localhost:5901")
+                }
             }
         }
     }
@@ -912,13 +924,22 @@ class ConnectionsViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 prootManager.startVncServer()
             }
-            val pwd = connections.value
-                .find { it.isVnc && it.host == "localhost" && it.vncPort == 5901 }
-                ?.vncPassword
-            delay(4000) // VNC server startup
-            _navigateToVnc.value = VncNavigation("localhost", 5901, pwd)
+            if (prootManager.installedDesktop?.isNative == true) {
+                delay(2000) // native compositor startup
+                _navigateToWayland.value = true
+            } else {
+                val pwd = connections.value
+                    .find { it.isVnc && it.host == "localhost" && it.vncPort == 5901 }
+                    ?.vncPassword
+                delay(4000) // VNC server startup
+                _navigateToVnc.value = VncNavigation("localhost", 5901, pwd)
+            }
             _launchingDesktop.value = false
         }
+    }
+
+    fun consumeNavigateToWayland() {
+        _navigateToWayland.value = false
     }
 
     private fun connectLocal(profile: ConnectionProfile) {
