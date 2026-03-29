@@ -299,13 +299,76 @@ class UserPreferencesRepository @Inject constructor(
         val label: String,
         val background: Long,
         val foreground: Long,
+        val ansiPalette: IntArray,
     ) {
-        HAVEN("Haven", 0xFF1A1A2E, 0xFF00E676),
-        CLASSIC_GREEN("Classic Green", 0xFF000000, 0xFF00FF00),
-        LIGHT("Light", 0xFFFFFFFF, 0xFF1A1A1A),
-        SOLARIZED_DARK("Solarized Dark", 0xFF002B36, 0xFF839496),
-        DRACULA("Dracula", 0xFF282A36, 0xFFF8F8F2),
-        MONOKAI("Monokai", 0xFF272822, 0xFFF8F8F2);
+        HAVEN(
+            label = "Haven",
+            background = 0xFF1A1A2E,
+            foreground = 0xFF00E676,
+            ansiPalette = intArrayOf(
+                // Black, Red, Green, Yellow, Blue, Magenta, Cyan, White
+                0xFF1A1A2E.toInt(), 0xFFFF5370.toInt(), 0xFF00E676.toInt(), 0xFFFFCB6B.toInt(),
+                0xFF82AAFF.toInt(), 0xFFC792EA.toInt(), 0xFF89DDFF.toInt(), 0xFFD0D0D0.toInt(),
+                // Bright: Black, Red, Green, Yellow, Blue, Magenta, Cyan, White
+                0xFF4A4A6A.toInt(), 0xFFFF869A.toInt(), 0xFF69F0AE.toInt(), 0xFFFFE082.toInt(),
+                0xFFB0C4FF.toInt(), 0xFFDDA0F5.toInt(), 0xFFB2EBF2.toInt(), 0xFFFFFFFF.toInt(),
+            ),
+        ),
+        CLASSIC_GREEN(
+            label = "Classic Green",
+            background = 0xFF000000,
+            foreground = 0xFF00FF00,
+            ansiPalette = intArrayOf(
+                0xFF000000.toInt(), 0xFFCD0000.toInt(), 0xFF00CD00.toInt(), 0xFFCDCD00.toInt(),
+                0xFF0000EE.toInt(), 0xFFCD00CD.toInt(), 0xFF00CDCD.toInt(), 0xFFE5E5E5.toInt(),
+                0xFF7F7F7F.toInt(), 0xFFFF0000.toInt(), 0xFF00FF00.toInt(), 0xFFFFFF00.toInt(),
+                0xFF5C5CFF.toInt(), 0xFFFF00FF.toInt(), 0xFF00FFFF.toInt(), 0xFFFFFFFF.toInt(),
+            ),
+        ),
+        LIGHT(
+            label = "Light",
+            background = 0xFFFFFFFF,
+            foreground = 0xFF1A1A1A,
+            ansiPalette = intArrayOf(
+                0xFF000000.toInt(), 0xFFC91B00.toInt(), 0xFF00C200.toInt(), 0xFFC7C400.toInt(),
+                0xFF0225C7.toInt(), 0xFFC930C7.toInt(), 0xFF00C5C7.toInt(), 0xFFC7C7C7.toInt(),
+                0xFF686868.toInt(), 0xFFFF6E67.toInt(), 0xFF5FFD68.toInt(), 0xFFFFFB67.toInt(),
+                0xFF6871FF.toInt(), 0xFFFF77FF.toInt(), 0xFF60FDFF.toInt(), 0xFFFFFFFF.toInt(),
+            ),
+        ),
+        SOLARIZED_DARK(
+            label = "Solarized Dark",
+            background = 0xFF002B36,
+            foreground = 0xFF839496,
+            ansiPalette = intArrayOf(
+                0xFF073642.toInt(), 0xFFDC322F.toInt(), 0xFF859900.toInt(), 0xFFB58900.toInt(),
+                0xFF268BD2.toInt(), 0xFFD33682.toInt(), 0xFF2AA198.toInt(), 0xFFEEE8D5.toInt(),
+                0xFF002B36.toInt(), 0xFFCB4B16.toInt(), 0xFF586E75.toInt(), 0xFF657B83.toInt(),
+                0xFF839496.toInt(), 0xFF6C71C4.toInt(), 0xFF93A1A1.toInt(), 0xFFFDF6E3.toInt(),
+            ),
+        ),
+        DRACULA(
+            label = "Dracula",
+            background = 0xFF282A36,
+            foreground = 0xFFF8F8F2,
+            ansiPalette = intArrayOf(
+                0xFF21222C.toInt(), 0xFFFF5555.toInt(), 0xFF50FA7B.toInt(), 0xFFF1FA8C.toInt(),
+                0xFFBD93F9.toInt(), 0xFFFF79C6.toInt(), 0xFF8BE9FD.toInt(), 0xFFF8F8F2.toInt(),
+                0xFF6272A4.toInt(), 0xFFFF6E6E.toInt(), 0xFF69FF94.toInt(), 0xFFFFFFA5.toInt(),
+                0xFFD6ACFF.toInt(), 0xFFFF92DF.toInt(), 0xFFA4FFFF.toInt(), 0xFFFFFFFF.toInt(),
+            ),
+        ),
+        MONOKAI(
+            label = "Monokai",
+            background = 0xFF272822,
+            foreground = 0xFFF8F8F2,
+            ansiPalette = intArrayOf(
+                0xFF272822.toInt(), 0xFFF92672.toInt(), 0xFFA6E22E.toInt(), 0xFFF4BF75.toInt(),
+                0xFF66D9EF.toInt(), 0xFFAE81FF.toInt(), 0xFFA1EFE4.toInt(), 0xFFF8F8F2.toInt(),
+                0xFF75715E.toInt(), 0xFFF92672.toInt(), 0xFFA6E22E.toInt(), 0xFFF4BF75.toInt(),
+                0xFF66D9EF.toInt(), 0xFFAE81FF.toInt(), 0xFFA1EFE4.toInt(), 0xFFF9F8F5.toInt(),
+            ),
+        );
 
         companion object {
             fun fromString(value: String?): TerminalColorScheme =

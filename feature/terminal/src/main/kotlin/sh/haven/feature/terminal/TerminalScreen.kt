@@ -468,9 +468,10 @@ fun TerminalScreen(
 
                         // Update native emulator colors when scheme changes
                         LaunchedEffect(colorScheme, activeTab.emulator) {
-                            activeTab.emulator?.setDefaultColors(
-                                colorScheme.foreground.toInt(),
-                                colorScheme.background.toInt(),
+                            activeTab.emulator?.applyColorScheme(
+                                ansiColors = colorScheme.ansiPalette,
+                                defaultForeground = colorScheme.foreground.toInt(),
+                                defaultBackground = colorScheme.background.toInt(),
                             )
                         }
 

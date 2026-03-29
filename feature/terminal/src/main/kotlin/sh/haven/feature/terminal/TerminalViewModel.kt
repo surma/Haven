@@ -509,6 +509,7 @@ class TerminalViewModel @Inject constructor(
                     termSession.resize(dims.columns, dims.rows)
                 },
             )
+            emulator.setAnsiPalette(scheme.ansiPalette)
 
             termSession.start()
 
@@ -583,6 +584,7 @@ class TerminalViewModel @Inject constructor(
                     rnsSession.resize(dims.columns, dims.rows)
                 },
             )
+            emulator.setAnsiPalette(rnsScheme.ansiPalette)
 
             rnsSession.start()
 
@@ -667,6 +669,7 @@ class TerminalViewModel @Inject constructor(
                     moshSession.resize(dims.columns, dims.rows)
                 },
             )
+            emulator.setAnsiPalette(moshScheme.ansiPalette)
 
             moshSession.start()
 
@@ -750,6 +753,7 @@ class TerminalViewModel @Inject constructor(
                     etSession.resize(dims.columns, dims.rows)
                 },
             )
+            emulator.setAnsiPalette(etScheme.ansiPalette)
 
             etSession.start()
 
@@ -819,6 +823,7 @@ class TerminalViewModel @Inject constructor(
                     localSession.resize(dims.columns, dims.rows)
                 },
             )
+            emulator.setAnsiPalette(localScheme.ansiPalette)
 
             localSession.start()
 
