@@ -8,6 +8,8 @@
   Free SSH, VNC, RDP, SFTP &amp; cloud storage client for Android
 </p>
 
+> *"Haven is an interesting vibe coding experiment. Let's see what comes out of it."* — DBP
+
 <p align="center">
   <a href="https://github.com/GlassOnTin/Haven/releases/latest"><img src="https://img.shields.io/github/v/release/GlassOnTin/Haven?style=flat-square" alt="Release" /></a>
   <a href="https://github.com/GlassOnTin/Haven/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/GlassOnTin/Haven/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
