@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material.icons.filled.Menu
@@ -43,15 +44,21 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.viewinterop.AndroidView
+import java.io.File
 import sh.haven.core.data.preferences.NavBlockMode
 import sh.haven.core.data.preferences.ToolbarLayout
 
@@ -68,11 +75,17 @@ fun WaylandDesktopView(
     navBlockMode: NavBlockMode = NavBlockMode.ALIGNED,
     onFullscreenChanged: (Boolean) -> Unit = {},
 ) {
+    val context = LocalContext.current
     var zoom by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
     var fullscreen by remember { mutableStateOf(false) }
     var overlayVisible by remember { mutableStateOf(false) }
+    // Remember the initial TextureView container size so the keyboard
+    // opening (which shrinks the pager via imePadding) doesn't squash the
+    // compositor output. The Box keeps its initial height; the parent
+    // clips rather than stretches.
+    var initialBoxHeight by remember { mutableIntStateOf(0) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -80,9 +93,14 @@ fun WaylandDesktopView(
         }
     }
 
+    val density = LocalDensity.current
     Column(modifier = modifier) {
     Box(
         modifier = Modifier.weight(1f)
+            .onSizeChanged { size ->
+                // Capture the initial height before keyboard shrinks us
+                if (initialBoxHeight == 0) initialBoxHeight = size.height
+            }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     // Wait for first finger
@@ -138,15 +156,26 @@ fun WaylandDesktopView(
 
                         surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                             private var nativeSurface: Surface? = null
+                            private var initialWidth = 0
+                            private var initialHeight = 0
                             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                                 android.util.Log.i("WaylandTV", "TextureAvailable: ${w}x${h} view=${width}x${height}")
+                                initialWidth = w
+                                initialHeight = h
                                 st.setDefaultBufferSize(w, h)
                                 nativeSurface = Surface(st)
                                 WaylandBridge.nativeSetSurface(nativeSurface)
                             }
                             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                                android.util.Log.i("WaylandTV", "TextureSizeChanged: ${w}x${h} view=${width}x${height}")
-                                st.setDefaultBufferSize(w, h)
+                                android.util.Log.i("WaylandTV", "TextureSizeChanged: ${w}x${h} initial=${initialWidth}x${initialHeight}")
+                                // Only resize if width changed (not keyboard show/hide which only changes height).
+                                // This prevents the compositor buffer from being squashed when imePadding
+                                // shrinks the pager vertically.
+                                if (w != initialWidth) {
+                                    initialWidth = w
+                                    initialHeight = h
+                                    st.setDefaultBufferSize(w, h)
+                                }
                             }
                             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                                 WaylandBridge.nativeSetSurface(null)
@@ -303,6 +332,15 @@ fun WaylandDesktopView(
                             }
                         }
                         IconButton(onClick = {
+                            val bench = File(context.applicationInfo.nativeLibraryDir, "libbenchmark_gles.so")
+                            if (bench.canExecute()) {
+                                WaylandBridge.nativeLaunchBenchmark(bench.absolutePath)
+                            }
+                            overlayVisible = false
+                        }) {
+                            Icon(Icons.Default.Speed, contentDescription = "GPU Benchmark")
+                        }
+                        IconButton(onClick = {
                             overlayVisible = false
                             fullscreen = false
                             onFullscreenChanged(false)
@@ -326,11 +364,27 @@ fun WaylandDesktopView(
                 navBlockMode = navBlockMode,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = {
-                fullscreen = true
-                onFullscreenChanged(true)
-            }) {
-                Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen")
+            Column {
+                IconButton(
+                    onClick = {
+                        val bench = File(context.applicationInfo.nativeLibraryDir, "libbenchmark_gles.so")
+                        if (bench.canExecute()) {
+                            WaylandBridge.nativeLaunchBenchmark(bench.absolutePath)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(Icons.Default.Speed, contentDescription = "GPU Benchmark", modifier = Modifier.size(18.dp))
+                }
+                IconButton(
+                    onClick = {
+                        fullscreen = true
+                        onFullscreenChanged(true)
+                    },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", modifier = Modifier.size(18.dp))
+                }
             }
         }
     }

@@ -55,4 +55,7 @@ object WaylandBridge {
 
     /** Set viewport offset in compositor buffer pixels (for pan/scroll). */
     external fun nativeSetViewport(x: Int, y: Int)
+
+    /** Launch a native Wayland client binary (e.g. GPU benchmark). */
+    external fun nativeLaunchBenchmark(binaryPath: String)
 }
