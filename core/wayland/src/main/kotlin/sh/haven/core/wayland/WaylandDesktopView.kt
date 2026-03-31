@@ -13,12 +13,37 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.KeyboardHide
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,10 +66,13 @@ fun WaylandDesktopView(
     modifier: Modifier = Modifier,
     toolbarLayout: ToolbarLayout = ToolbarLayout.DEFAULT,
     navBlockMode: NavBlockMode = NavBlockMode.ALIGNED,
+    onFullscreenChanged: (Boolean) -> Unit = {},
 ) {
     var zoom by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
+    var fullscreen by remember { mutableStateOf(false) }
+    var overlayVisible by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -222,12 +250,95 @@ fun WaylandDesktopView(
                     translationY = panY
                 },
         )
+
+        // Fullscreen corner hotspot and overlay menu
+        if (fullscreen) {
+            if (overlayVisible) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { overlayVisible = false },
+                )
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !overlayVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                Surface(
+                    onClick = { overlayVisible = true },
+                    shape = RoundedCornerShape(bottomStart = 12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
+                ) {
+                    Icon(
+                        Icons.Default.Menu,
+                        contentDescription = "Session menu",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(8.dp).size(20.dp),
+                    )
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = overlayVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(bottomStart = 16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    shadowElevation = 8.dp,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (zoom != 1f || panX != 0f || panY != 0f) {
+                            IconButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
+                                Icon(Icons.Default.FullscreenExit, contentDescription = "Reset zoom")
+                            }
+                        }
+                        IconButton(onClick = {
+                            overlayVisible = false
+                            fullscreen = false
+                            onFullscreenChanged(false)
+                        }) {
+                            Icon(Icons.Default.FullscreenExit, contentDescription = "Exit fullscreen")
+                        }
+                    }
+                }
+            }
+        }
     }
-    WaylandToolbar(
-        layout = toolbarLayout,
-        navBlockMode = navBlockMode,
-        modifier = Modifier.fillMaxWidth(),
-    )
+
+    // Toolbar + fullscreen button (hidden in fullscreen)
+    if (!fullscreen) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WaylandToolbar(
+                layout = toolbarLayout,
+                navBlockMode = navBlockMode,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = {
+                fullscreen = true
+                onFullscreenChanged(true)
+            }) {
+                Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen")
+            }
+        }
+    }
+
+    // Notify parent of fullscreen changes
+    LaunchedEffect(fullscreen) {
+        onFullscreenChanged(fullscreen)
+    }
     } // Column
 }
 

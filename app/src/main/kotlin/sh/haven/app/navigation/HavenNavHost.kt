@@ -392,6 +392,7 @@ fun HavenNavHost(
                         modifier = Modifier.fillMaxSize(),
                         toolbarLayout = toolbarLayout,
                         navBlockMode = navBlockMode,
+                        onFullscreenChanged = { desktopFullscreen = it },
                     )
                 } else {
                     val consumePending = {
