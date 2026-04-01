@@ -94,6 +94,10 @@ Notifications appear as a toast in the foreground or as an Android notification 
 
 </details>
 
+## Languages
+
+Haven is available in 11 languages: English, Chinese (simplified), Spanish, Hindi, Arabic (with RTL support), Portuguese, Bengali, Russian, Japanese, French, and German. The UI automatically switches to the device language. Community translation contributions welcome.
+
 ## Install
 
 | Channel | |
@@ -135,6 +139,7 @@ Output: `app/build/outputs/apk/debug/haven-*-debug.apk`
 | [PRoot](https://proot-me.github.io) | Local Linux shell (userspace chroot) | GPL-2.0 |
 | [labwc](https://labwc.github.io) | Wayland compositor (native desktop) | GPL-2.0 |
 | [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) | Wayland compositor library | MIT |
+| [virglrenderer](https://gitlab.freedesktop.org/virgl/virglrenderer) | GPU virtualization (OpenGL passthrough to PRoot apps) | MIT |
 | [Jetpack Compose](https://developer.android.com/jetpack/compose) | UI toolkit | Apache-2.0 |
 
 ## License
