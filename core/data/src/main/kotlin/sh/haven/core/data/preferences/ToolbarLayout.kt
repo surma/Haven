@@ -52,13 +52,13 @@ enum class NavBlockMode(val id: String, val label: String) {
 data class MacroPreset(val label: String, val send: String, val description: String)
 
 val MACRO_PRESETS = listOf(
+    MacroPreset("Paste", "PASTE", "Paste clipboard"),
     MacroPreset("^C", "\u0003", "Ctrl+C (interrupt)"),
     MacroPreset("^D", "\u0004", "Ctrl+D (EOF)"),
     MacroPreset("^Z", "\u001a", "Ctrl+Z (suspend)"),
     MacroPreset("^L", "\u000c", "Ctrl+L (clear)"),
     MacroPreset("^A", "\u0001", "Ctrl+A (tmux prefix)"),
     MacroPreset("\u21e7Tab", "\u001b[Z", "Shift+Tab"),
-    MacroPreset("Paste", "PASTE", "Paste clipboard"),
 )
 
 data class ToolbarLayout(val rows: List<List<ToolbarItem>>) {

@@ -138,6 +138,7 @@ data class ToolbarCallbacks(
     val onShiftUsed: () -> Unit,
     val bracketPasteMode: Boolean = false,
     val clipboardManager: ClipboardManager? = null,
+    val onPaste: (String) -> Unit = {},
     val onEnterReorderMode: () -> Unit = {},
 )
 
@@ -188,6 +189,7 @@ fun KeyboardToolbar(
         onShiftUsed = { shiftActive = false },
         bracketPasteMode = bracketPasteMode,
         clipboardManager = clipboardManager,
+        onPaste = onPaste,
         onEnterReorderMode = { onReorderModeChanged(true) },
     )
 
@@ -595,6 +597,17 @@ private fun BuiltInKey(
                 cb.onShiftUsed()
             } else {
                 cb.onSendBytes(KEY_TAB)
+            }
+        }
+        ToolbarKey.PASTE -> ToolbarTextButton("Paste") {
+            val text = cb.clipboardManager?.primaryClip
+                ?.getItemAt(0)?.text?.toString()
+            if (!text.isNullOrEmpty()) {
+                if (cb.bracketPasteMode) {
+                    cb.onPaste("\u001b[200~$text\u001b[201~")
+                } else {
+                    cb.onPaste(text)
+                }
             }
         }
         ToolbarKey.SHIFT -> ToolbarToggleButton("Shift", shiftActive, onClick = cb.onToggleShift)
