@@ -79,6 +79,9 @@ fun KeysScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val clipboardEmptyMsg = stringResource(R.string.keys_clipboard_empty)
+    val clipboardNotKeyMsg = stringResource(R.string.keys_clipboard_not_text_key)
+    val publicKeyClipLabel = stringResource(R.string.keys_ssh_public_key_clip_label)
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -275,9 +278,9 @@ fun KeysScreen(
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString()
                 if (text.isNullOrBlank()) {
-                    viewModel.showError(context.getString(R.string.keys_clipboard_empty))
+                    viewModel.showError(clipboardEmptyMsg)
                 } else if (!text.startsWith("-----") && !text.startsWith("ssh-")) {
-                    viewModel.showError(context.getString(R.string.keys_clipboard_not_text_key))
+                    viewModel.showError(clipboardNotKeyMsg)
                 } else {
                     viewModel.startImport(text.toByteArray())
                 }
