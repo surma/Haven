@@ -24,7 +24,7 @@ class TerminalSession(
     val label: String,
     @Volatile private var channel: ChannelShell,
     @Volatile private var client: SshClient,
-    private val onDataReceived: (ByteArray, Int, Int) -> Unit,
+    @Volatile private var onDataReceived: (ByteArray, Int, Int) -> Unit,
     private val onDisconnected: ((cleanExit: Boolean) -> Unit)? = null,
     @Volatile var pendingCommand: String? = null,
 ) : Closeable {
@@ -50,6 +50,14 @@ class TerminalSession(
      * Start the reader thread that delivers SSH output to [onDataReceived].
      * Call this after all wiring (e.g., emulator setup) is complete.
      */
+    /**
+     * Replace the data callback (used when reattaching after Activity recreation).
+     * The reader thread continues running and will use the new callback immediately.
+     */
+    fun replaceDataCallback(callback: (ByteArray, Int, Int) -> Unit) {
+        onDataReceived = callback
+    }
+
     fun start() {
         readerThread = thread(
             name = "ssh-reader-$sessionId",

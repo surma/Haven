@@ -183,6 +183,21 @@ class SshSessionManager @Inject constructor(
     }
 
     /**
+     * Whether a session already has a terminal session attached (e.g. after Activity recreation).
+     * The TerminalViewModel should reattach to it rather than creating a new one.
+     */
+    fun hasExistingTerminalSession(sessionId: String): Boolean {
+        val session = _sessions.value[sessionId] ?: return false
+        return session.status == SessionState.Status.CONNECTED &&
+            session.terminalSession != null
+    }
+
+    /** Get the existing terminal session for reattach after Activity recreation. */
+    fun getExistingTerminalSession(sessionId: String): TerminalSession? {
+        return _sessions.value[sessionId]?.terminalSession
+    }
+
+    /**
      * Open an SFTP channel for a profile. Finds any connected session for that profile
      * and opens (or reuses) an SFTP channel on it.
      * Returns the channel, or null if no session for this profile is connected.

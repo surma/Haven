@@ -647,10 +647,20 @@ class TerminalViewModel @Inject constructor(
             }
         }
 
-        // Create tabs for new SSH sessions
+        // Create tabs for new SSH sessions (or reattach to existing ones after Activity recreation)
         for (sessionId in activeSshIds) {
             if (sessionId in trackedSessionIds) continue
-            if (!sessionManager.isReadyForTerminal(sessionId)) continue
+
+            // Reattach to an existing terminal session (ViewModel recreated after background)
+            val existingTermSession = if (!sessionManager.isReadyForTerminal(sessionId) &&
+                sessionManager.hasExistingTerminalSession(sessionId)
+            ) {
+                sessionManager.getExistingTerminalSession(sessionId)
+            } else {
+                null
+            }
+
+            if (existingTermSession == null && !sessionManager.isReadyForTerminal(sessionId)) continue
 
             val session = sshSessions[sessionId] ?: continue
             val baseLabel = session.label
@@ -664,7 +674,19 @@ class TerminalViewModel @Inject constructor(
             val hyperlinkFlow = MutableStateFlow<String?>(null)
             oscHandler.onCwdChanged = { cwdFlow.value = it }
             oscHandler.onHyperlink = { uri -> hyperlinkFlow.value = uri }
-            val termSession = sessionManager.createTerminalSession(
+
+            val termSession = existingTermSession?.also {
+                // Reattach: rewire data callback to the new emulator/OSC handler
+                it.replaceDataCallback { data, offset, length ->
+                    oscHandler.process(data, offset, length)
+                    mouseTracker.process(oscHandler.outputBuf, 0, oscHandler.outputLen)
+                    val len = oscHandler.outputLen
+                    if (len > 0) {
+                        writeBuffer.append(oscHandler.outputBuf, 0, len)
+                    }
+                }
+                Log.d(TAG, "Reattached to existing terminal session $sessionId")
+            } ?: sessionManager.createTerminalSession(
                 sessionId = sessionId,
                 onDataReceived = { data, offset, length ->
                     oscHandler.process(data, offset, length)
@@ -699,7 +721,9 @@ class TerminalViewModel @Inject constructor(
                 },
             )
 
-            termSession.start()
+            if (existingTermSession == null) {
+                termSession.start()
+            }
 
             val sshSessionId = session.sessionId
             val reconnectingFlow = sessionManager.sessions
