@@ -128,7 +128,9 @@ fun SftpScreen(
     LaunchedEffect(lastDownload) {
         val dl = lastDownload ?: return@LaunchedEffect
         viewModel.dismissMessage() // clear the plain message so it doesn't double-show
+        @Suppress("LocalContextGetResourceValueCall")
         val downloadedMessage = context.getString(R.string.sftp_downloaded, dl.fileName)
+        @Suppress("LocalContextGetResourceValueCall")
         val openLabel = context.getString(R.string.sftp_open)
         val result = snackbarHostState.showSnackbar(
             message = downloadedMessage,
@@ -144,6 +146,7 @@ fun SftpScreen(
                 }
                 context.startActivity(intent)
             } catch (e: Exception) {
+                @Suppress("LocalContextGetResourceValueCall")
                 snackbarHostState.showSnackbar(context.getString(R.string.sftp_no_app_to_open))
             }
         }
@@ -477,6 +480,7 @@ fun SftpScreen(
                                 onDelete = { viewModel.deleteEntry(entry) },
                                 onCopyPath = {
                                     clipboardManager.setText(AnnotatedString(entry.path))
+                                    @Suppress("LocalContextGetResourceValueCall")
                                     val pathCopiedMsg = context.getString(R.string.sftp_path_copied)
                                     scope.launch {
                                         snackbarHostState.showSnackbar(pathCopiedMsg)
@@ -572,6 +576,7 @@ private fun FileListItem(
         ListItem(
             headlineContent = { Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             supportingContent = {
+                @Suppress("LocalContextGetResourceValueCall")
                 val sizeText = if (entry.isDirectory) context.getString(R.string.sftp_directory) else Formatter.formatFileSize(context, entry.size)
                 val dateText = dateFormat.format(Date(entry.modifiedTime * 1000))
                 Text("$sizeText  $dateText")

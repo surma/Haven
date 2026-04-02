@@ -655,6 +655,8 @@ PS1='\[\e]133;D;${'$'}?\a\e]133;A\a\]'${'$'}PS1'\[\e]133;B\a\]'"""
         val zshSnippet = """# Add to ~/.zshrc
 precmd()  { print -Pn '\e]133;D;%?\a\e]133;A\a' }
 preexec() { print -Pn '\e]133;B\a\e]133;C\a' }"""
+        val copiedBashMsg = stringResource(R.string.settings_osc133_copied_bash)
+        val copiedZshMsg = stringResource(R.string.settings_osc133_copied_zsh)
         AlertDialog(
             onDismissRequest = { showOsc133SetupDialog = false },
             title = { Text(stringResource(R.string.settings_osc133_dialog_title)) },
@@ -676,7 +678,7 @@ preexec() { print -Pn '\e]133;B\a\e]133;C\a' }"""
                             .padding(8.dp)
                             .clickable {
                                 clipboardManager.setPrimaryClip(android.content.ClipData.newPlainText("bash", bashSnippet))
-                                android.widget.Toast.makeText(context, context.getString(R.string.settings_osc133_copied_bash), android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, copiedBashMsg, android.widget.Toast.LENGTH_SHORT).show()
                             },
                     )
                     Spacer(Modifier.height(12.dp))
@@ -691,7 +693,7 @@ preexec() { print -Pn '\e]133;B\a\e]133;C\a' }"""
                             .padding(8.dp)
                             .clickable {
                                 clipboardManager.setPrimaryClip(android.content.ClipData.newPlainText("zsh", zshSnippet))
-                                android.widget.Toast.makeText(context, context.getString(R.string.settings_osc133_copied_zsh), android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, copiedZshMsg, android.widget.Toast.LENGTH_SHORT).show()
                             },
                     )
                     Spacer(Modifier.height(8.dp))

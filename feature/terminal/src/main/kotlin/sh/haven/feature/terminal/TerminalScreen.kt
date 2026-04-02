@@ -415,8 +415,10 @@ fun TerminalScreen(
                                 if (output != null) {
                                     val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clip.setPrimaryClip(ClipData.newPlainText("command output", output))
+                                    @Suppress("LocalContextGetResourceValueCall")
                                     android.widget.Toast.makeText(context, context.getString(R.string.terminal_copied_output, output.length), android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
+                                    @Suppress("LocalContextGetResourceValueCall")
                                     android.widget.Toast.makeText(context, context.getString(R.string.terminal_no_command_output), android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
