@@ -16,6 +16,10 @@
 - [x] **Copy last command output** — OSC 133 semantic shell integration, one-tap copy of last command's output with setup dialog
 - [x] **OSC 133-safe prompt detection** — session manager commands (tmux/zellij) work alongside shell integration escape sequences
 
+### Wayland Desktop
+- [x] **Desktop addons** — install and launch GUI apps within the Wayland compositor
+- [x] **GTK Wayland preference** — GTK apps use Wayland backend by default
+
 ### Connections
 - [x] **Import SSH keys** — PEM/OpenSSH/PuTTY PPK format with passphrase support
 - [x] **FIDO2 SSH keys** — ecdsa-sk, ed25519-sk hardware key support
@@ -37,12 +41,12 @@
 - [x] **Encrypted SSH keys at rest** — Android Keystore wrapping
 - [x] **Prevent screenshots** — optional FLAG_SECURE
 - [x] **Zero passwords from memory** — wipe credential buffers after auth
-- [x] **Biometric app lock** — fingerprint/face unlock on launch
+- [x] **Screen lock** — biometric, PIN, password, or pattern unlock on launch
 - [x] **Backup & restore** — encrypted export/import of all data (AES-256-GCM, PBKDF2)
 
 ### Remote Desktop
 - [x] **VNC viewer** — embedded VNC client over SSH port forwarding
-- [x] **RDP** — Windows remote desktop via FreeRDP NDK
+- [x] **RDP** — Windows remote desktop via IronRDP (Rust/UniFFI)
 - [x] **Local Xfce desktop** — PRoot VNC desktop environment
 
 ### File Transfer
@@ -69,12 +73,11 @@
 
 ### Security
 - [ ] **Agent forwarding** — SSH agent for `git push` from remote servers
-- [ ] **Tor/SOCKS proxy** — connect to onion services (JSch proxy infra exists)
 
 ## Longer-term
 
 - [ ] **X11 forwarding** — lightweight X11 server for individual GUI applications
 - [ ] **Connection groups/folders** — organize by project or environment
 - [ ] **Snippet/command library** — save and recall frequent commands
-- [ ] **Per-profile biometric unlock** — require biometric for high-security connections
+- [ ] **Per-profile auth unlock** — require authentication for high-security connections
 - [ ] **Audit log UI** — surface ConnectionLog entity for security-conscious users

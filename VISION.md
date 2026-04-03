@@ -66,7 +66,8 @@ No other Android app ships a full Linux userland. This is Haven's unique wedge.
 
 - ~~**Tor/SOCKS proxy support**~~ — shipped in v3.11.0. SOCKS5/SOCKS4/HTTP proxy per profile, .onion address detection.
 - ~~**Rootfs integrity verification**~~ — shipped in v3.12.2. SHA-256 checksum for Alpine minirootfs downloads.
-- **Per-profile biometric unlock** — high-security connections require biometric each time, not just at app launch.
+- ~~**Screen lock with device credentials**~~ — shipped in v4.29.0. App lock accepts biometric, PIN, password, or pattern — not just biometrics.
+- **Per-profile authentication** — high-security connections require authentication each time, not just at app launch.
 - **Audit log** — surface the existing ConnectionLog entity in the UI for security-conscious users.
 
 ### 5. Terminal polish (ongoing)
@@ -76,7 +77,7 @@ Split panes, scrollback search, and session persistence are provided by tmux/zel
 - ~~**URL detection**~~ — shipped. Clickable URLs and OSC 8 hyperlinks.
 - ~~**Copy/paste reliability**~~ — fixed in v3.12.1. Smart copy with TUI border stripping.
 - ~~**Selection/gesture stability**~~ — fixed in v3.12.5. Pager snap-back, drag reorder with children.
-- **Semantic shell integration** — OSC 133 prompt markers enable "copy last command output" and per-command navigation. The `getLastCommandOutput()` method exists in termlib, not yet wired to UI.
+- ~~**Semantic shell integration**~~ — shipped. OSC 133 prompt markers enable "copy last command output" (one-tap button in tab bar) and per-command navigation. Setup dialog guides shell configuration.
 
 ## What to defer
 
