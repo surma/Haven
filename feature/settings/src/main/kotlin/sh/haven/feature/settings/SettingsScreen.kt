@@ -1045,7 +1045,7 @@ private fun ColorSchemeDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_color_scheme_dialog_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 UserPreferencesRepository.TerminalColorScheme.entries.forEach { scheme ->
                     ListItem(
                         headlineContent = {

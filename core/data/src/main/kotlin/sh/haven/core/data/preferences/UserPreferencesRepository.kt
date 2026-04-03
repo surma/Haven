@@ -337,7 +337,15 @@ class UserPreferencesRepository @Inject constructor(
         LIGHT("Light", 0xFFFFFFFF, 0xFF1A1A1A),
         SOLARIZED_DARK("Solarized Dark", 0xFF002B36, 0xFF839496),
         DRACULA("Dracula", 0xFF282A36, 0xFFF8F8F2),
-        MONOKAI("Monokai", 0xFF272822, 0xFFF8F8F2);
+        MONOKAI("Monokai", 0xFF272822, 0xFFF8F8F2),
+        NORD("Nord", 0xFF2E3440, 0xFFD8DEE9),
+        GRUVBOX("Gruvbox", 0xFF282828, 0xFFEBDBB2),
+        TOKYO_NIGHT("Tokyo Night", 0xFF1A1B26, 0xFFA9B1D6),
+        QBASIC("QBasic", 0xFF0000AA, 0xFFAAAAAA),
+        AMBER("Amber", 0xFF1A1000, 0xFFFFB000),
+        PINK("Pink", 0xFF2D001E, 0xFFFF9EC6),
+        LAVENDER("Lavender", 0xFF1E1629, 0xFFCDB4DB),
+        OCEAN("Ocean", 0xFF0A192F, 0xFF64FFDA);
 
         companion object {
             fun fromString(value: String?): TerminalColorScheme =
