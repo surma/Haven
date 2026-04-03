@@ -151,6 +151,12 @@ class ProotManager @Inject constructor(
             packages = "waybar fuzzel dbus thunar mousepad foot firefox gnome-calculator imv font-noto-emoji adwaita-icon-theme",
             sizeEstimate = "~120MB",
         ),
+        VNC_DESKTOP(
+            label = "VNC Desktop",
+            description = "Xfce4 + VNC server — access PRoot desktop from Haven's Desktop tab",
+            packages = "tigervnc xfce4 xfce4-terminal dbus-x11",
+            sizeEstimate = "~100MB",
+        ),
     }
 
     /** Which add-ons are installed (persisted as a file in the rootfs). */
@@ -580,6 +586,25 @@ chmod +x /root/.vnc/xstartup""")
 
             writeDesktopConfigs()
 
+            // Configure VNC if VNC_DESKTOP addon is being installed
+            if (DesktopAddon.VNC_DESKTOP in addons) {
+                _desktopState.value = DesktopSetupState.Installing("Configuring VNC...")
+                runCommandInProot("mkdir -p /root/.vnc")
+                // Set a default VNC password
+                val (_, pwdExit) = runCommandInProot(
+                    "echo 'haven' | vncpasswd -f > /root/.vnc/passwd && chmod 600 /root/.vnc/passwd"
+                )
+                Log.d(TAG, "VNC password set (exit=$pwdExit)")
+                // Write xstartup for Xfce4
+                runCommandInProot("""cat > /root/.vnc/xstartup << 'XEOF'
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+exec startxfce4
+XEOF
+chmod +x /root/.vnc/xstartup""")
+            }
+
             // Write marker
             File(rootfsDir, "root/.haven-addons")
                 .writeText(addons.joinToString("\n") { it.name })
@@ -763,10 +788,13 @@ chmod +x /root/.vnc/xstartup""")
 
         val de = installedDesktop ?: DesktopEnvironment.XFCE4
 
-        if (de.isNative) {
+        if (de.isNative && DesktopAddon.VNC_DESKTOP !in installedAddons) {
             startNativeCompositor(de, waylandShellCommand)
             return
         }
+
+        // If native Wayland is installed with VNC_DESKTOP addon, use XFCE4 config for VNC
+        val vncDe = if (de.isNative) DesktopEnvironment.XFCE4 else de
 
         val prootBin = prootBinary ?: return
         val loaderPath = File(context.applicationInfo.nativeLibraryDir, "libproot_loader.so").absolutePath
@@ -775,10 +803,10 @@ chmod +x /root/.vnc/xstartup""")
         val rootHome = File(rootfsDir, "root")
         rootHome.mkdirs()
 
-        val shellCommand = if (de.isWayland) {
-            Log.d(TAG, "Starting Wayland desktop: ${de.label}")
+        val shellCommand = if (vncDe.isWayland) {
+            Log.d(TAG, "Starting Wayland desktop: ${vncDe.label}")
             // Wayland: labwc + wayvnc — no X11 lock files or Xvnc needed
-            "export HOME=/root; ${de.startCommands} wait"
+            "export HOME=/root; ${vncDe.startCommands} wait"
         } else {
             // X11: Xvnc + traditional desktop environment
             File(context.cacheDir, ".X1-lock").delete()
@@ -805,7 +833,7 @@ chmod +x /root/.vnc/xstartup""")
                 // virgl GPU passthrough for GL apps (if virgl_test_server is running)
                 "export GALLIUM_DRIVER=virpipe; " +
                 "export VTEST_SOCKET=/tmp/.virgl_test; " +
-                "${de.startCommands} " +
+                "${vncDe.startCommands} " +
                 "wait"
         }
 
