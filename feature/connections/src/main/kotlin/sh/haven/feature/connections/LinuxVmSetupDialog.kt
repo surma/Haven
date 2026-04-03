@@ -58,6 +58,10 @@ private const val DESKTOP_SETUP = """sudo apt install -y xfce4 xfce4-terminal
 vncserver -kill :1
 vncserver :1 -localhost no -geometry 1920x1080"""
 
+private const val APPS_SETUP = """sudo apt install -y thunar mousepad ristretto \
+    gnome-calculator firefox-esr \
+    fonts-noto-color-emoji adwaita-icon-theme-full htop"""
+
 @Composable
 fun LinuxVmSetupDialog(
     vmStatus: LocalVmStatus,
@@ -116,7 +120,7 @@ fun LinuxVmSetupDialog(
                 Text("Quick setup", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Installs SSH, VNC, and Xfce4 desktop:",
+                    "Installs SSH, VNC, Xfce4 desktop, and apps (browser, editor, file manager):",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(4.dp))
@@ -212,6 +216,18 @@ fun LinuxVmSetupDialog(
                     )
                     Spacer(Modifier.height(4.dp))
                     CodeBlock(code = DESKTOP_SETUP, context = context)
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Desktop apps
+                    Text("6. Install desktop apps (optional)", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "File manager, text editor, image viewer, browser, calculator.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    CodeBlock(code = APPS_SETUP, context = context)
                 }
             }
         },

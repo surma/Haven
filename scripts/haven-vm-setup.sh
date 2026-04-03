@@ -52,6 +52,14 @@ exec startxfce4
 XSTARTUP
 chmod +x ~/.vnc/xstartup
 
+echo "=== Installing desktop apps ==="
+sudo apt install -y \
+    thunar mousepad ristretto \
+    gnome-calculator \
+    firefox-esr \
+    fonts-noto-color-emoji adwaita-icon-theme-full \
+    htop
+
 echo "=== Starting VNC server ==="
 vncserver -kill :1 2>/dev/null || true
 vncserver :1 -localhost no -geometry 1920x1080 -depth 24
@@ -60,6 +68,9 @@ echo ""
 echo "=== Done ==="
 echo "SSH:  droid@localhost:8022"
 echo "VNC:  localhost:5901"
+echo ""
+echo "Installed apps: Thunar (files), Mousepad (editor), Ristretto (images),"
+echo "                Firefox ESR (browser), Calculator, htop"
 echo ""
 echo "Make sure port 8022 is in Terminal app settings → listening ports."
 echo "In Haven, tap the Linux VM card on the Connect tab."

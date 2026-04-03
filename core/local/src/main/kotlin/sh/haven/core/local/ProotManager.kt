@@ -145,6 +145,12 @@ class ProotManager @Inject constructor(
             packages = "mousepad imv mpv",
             sizeEstimate = "~15MB",
         ),
+        STARTER_PACK(
+            label = "Starter Pack",
+            description = "Panel + file manager + editor + terminal + browser + calculator",
+            packages = "waybar fuzzel dbus thunar mousepad foot firefox gnome-calculator imv font-noto-emoji adwaita-icon-theme",
+            sizeEstimate = "~120MB",
+        ),
     }
 
     /** Which add-ons are installed (persisted as a file in the rootfs). */
