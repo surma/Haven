@@ -139,6 +139,12 @@ class ProotManager @Inject constructor(
             packages = "thunar",
             sizeEstimate = "~10MB",
         ),
+        APPS(
+            label = "Desktop Apps",
+            description = "Text editor, image viewer, media player",
+            packages = "mousepad imv mpv",
+            sizeEstimate = "~15MB",
+        ),
     }
 
     /** Which add-ons are installed (persisted as a file in the rootfs). */
@@ -646,6 +652,7 @@ chmod +x /root/.vnc/xstartup""")
         // $HOME inside dbus-run-session depending on environment.
         val appsDir = File(root, ".local/share/applications").apply { mkdirs() }
         val sysAppsDir = File(rootfsDir, "usr/share/applications").apply { mkdirs() }
+        // Always-available entries
         val desktopEntries = mutableMapOf(
             "foot.desktop" to """
                 |[Desktop Entry]
@@ -658,22 +665,57 @@ chmod +x /root/.vnc/xstartup""")
             "htop.desktop" to """
                 |[Desktop Entry]
                 |Name=System Monitor
-                |Exec=foot htop
+                |Exec=foot -e htop
                 |Icon=utilities-system-monitor
                 |Type=Application
                 |Categories=System;Monitor;
                 """.trimMargin(),
         )
-        if (File(rootfsDir, "usr/bin/thunar").exists()) {
-            desktopEntries["thunar.desktop"] = """
+
+        // Conditional entries — only written if the binary exists
+        data class AppEntry(val file: String, val binary: String, val content: String)
+        val conditionalApps = listOf(
+            AppEntry("thunar.desktop", "usr/bin/thunar", """
                 |[Desktop Entry]
                 |Name=File Manager
                 |Exec=thunar
                 |Icon=system-file-manager
                 |Type=Application
                 |Categories=System;FileManager;
-                """.trimMargin()
+                """.trimMargin()),
+            AppEntry("mousepad.desktop", "usr/bin/mousepad", """
+                |[Desktop Entry]
+                |Name=Text Editor
+                |Exec=mousepad
+                |Icon=accessories-text-editor
+                |Type=Application
+                |Categories=Utility;TextEditor;
+                """.trimMargin()),
+            AppEntry("imv.desktop", "usr/bin/imv-wayland", """
+                |[Desktop Entry]
+                |Name=Image Viewer
+                |Exec=imv-wayland
+                |Icon=image-x-generic
+                |Type=Application
+                |Categories=Graphics;Viewer;
+                |MimeType=image/png;image/jpeg;image/gif;image/bmp;image/webp;
+                """.trimMargin()),
+            AppEntry("mpv.desktop", "usr/bin/mpv", """
+                |[Desktop Entry]
+                |Name=Media Player
+                |Exec=mpv --player-operation-mode=pseudo-gui
+                |Icon=multimedia-video-player
+                |Type=Application
+                |Categories=AudioVideo;Video;
+                |MimeType=video/mp4;video/webm;audio/mp3;audio/ogg;
+                """.trimMargin()),
+        )
+        for (app in conditionalApps) {
+            if (File(rootfsDir, app.binary).exists()) {
+                desktopEntries[app.file] = app.content
+            }
         }
+
         for ((name, content) in desktopEntries) {
             File(appsDir, name).writeText(content)
             File(sysAppsDir, name).writeText(content)
@@ -934,6 +976,8 @@ chmod +x /root/.vnc/xstartup""")
                 "export XDG_RUNTIME_DIR=/tmp/xdg-runtime; " +
                 "export XDG_DATA_HOME=/root/.local/share; " +
                 "export XDG_DATA_DIRS=/usr/local/share:/usr/share; " +
+                // GTK: prefer native Wayland over XWayland
+                "export GDK_BACKEND=wayland,x11; " +
                 "export WAYLAND_DISPLAY=wayland-0; " +
                 "unset FONTCONFIG_FILE; " +
                 "unset XKB_CONFIG_ROOT; " +
