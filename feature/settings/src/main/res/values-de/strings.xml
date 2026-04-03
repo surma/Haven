@@ -32,8 +32,8 @@
     <string name="settings_title">Einstellungen</string>
 
     <!-- Security section -->
-    <string name="settings_biometric_title">Biometrische Entsperrung</string>
-    <string name="settings_biometric_subtitle">Biometrie zum Öffnen von Haven verlangen</string>
+    <string name="settings_biometric_title">Bildschirmsperre</string>
+    <string name="settings_biometric_subtitle">Authentifizierung zum Öffnen von Haven verlangen</string>
     <string name="settings_lock_timeout_title">Sperrzeitüberschreitung</string>
     <string name="settings_prevent_screenshots_title">Screenshots verhindern</string>
     <string name="settings_prevent_screenshots_subtitle">Bildschirmaufnahme und Task-Switcher-Vorschau blockieren</string>

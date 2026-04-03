@@ -13,6 +13,14 @@ import kotlin.coroutines.resume
 @Singleton
 class BiometricAuthenticator @Inject constructor() {
 
+    companion object {
+        /** Accepts biometric (strong or weak) or device credential (PIN/password/pattern). */
+        private const val ALLOWED_AUTHENTICATORS =
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+    }
+
     enum class Availability { AVAILABLE, NO_HARDWARE, NOT_ENROLLED }
 
     sealed class AuthResult {
@@ -23,10 +31,7 @@ class BiometricAuthenticator @Inject constructor() {
 
     fun checkAvailability(context: Context): Availability {
         val biometricManager = BiometricManager.from(context)
-        return when (biometricManager.canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.BIOMETRIC_WEAK,
-        )) {
+        return when (biometricManager.canAuthenticate(ALLOWED_AUTHENTICATORS)) {
             BiometricManager.BIOMETRIC_SUCCESS -> Availability.AVAILABLE
             BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> Availability.NOT_ENROLLED
             else -> Availability.NO_HARDWARE
@@ -64,7 +69,7 @@ class BiometricAuthenticator @Inject constructor() {
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
-            .setNegativeButtonText("Cancel")
+            .setAllowedAuthenticators(ALLOWED_AUTHENTICATORS)
             .build()
 
         prompt.authenticate(promptInfo)

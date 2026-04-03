@@ -20,8 +20,8 @@ private const val VTERM_KEY_HOME = 11
 private const val VTERM_KEY_END = 12
 private const val VTERM_KEY_PAGEUP = 13
 private const val VTERM_KEY_PAGEDOWN = 14
-private const val VTERM_KEY_DEL = 15
-private const val VTERM_KEY_INS = 16
+private const val VTERM_KEY_INS = 9
+private const val VTERM_KEY_DEL = 10
 private const val VTERM_KEY_FUNCTION_0 = 256
 
 private fun vtermKeyToEvdev(key: Int): Int = when (key) {

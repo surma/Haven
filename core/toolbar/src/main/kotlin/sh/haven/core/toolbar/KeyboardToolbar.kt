@@ -463,6 +463,8 @@ private const val VTERM_KEY_UP = 5
 private const val VTERM_KEY_DOWN = 6
 private const val VTERM_KEY_LEFT = 7
 private const val VTERM_KEY_RIGHT = 8
+private const val VTERM_KEY_INS = 9
+private const val VTERM_KEY_DEL = 10
 private const val VTERM_KEY_HOME = 11
 private const val VTERM_KEY_END = 12
 private const val VTERM_KEY_PAGEUP = 13
@@ -681,6 +683,8 @@ private fun BuiltInKey(
         ToolbarKey.END -> ToolbarTextButton("End") { cb.onDispatchKey(0, VTERM_KEY_END) }
         ToolbarKey.PGUP -> ToolbarTextButton("PgUp") { cb.onDispatchKey(0, VTERM_KEY_PAGEUP) }
         ToolbarKey.PGDN -> ToolbarTextButton("PgDn") { cb.onDispatchKey(0, VTERM_KEY_PAGEDOWN) }
+        ToolbarKey.INSERT -> ToolbarTextButton("Ins") { cb.onDispatchKey(0, VTERM_KEY_INS) }
+        ToolbarKey.DELETE -> ToolbarTextButton("Del") { cb.onDispatchKey(0, VTERM_KEY_DEL) }
         // F-keys — routed through dispatchKey so libvterm generates correct sequences
         ToolbarKey.F1 -> ToolbarTextButton("F1") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 1) }
         ToolbarKey.F2 -> ToolbarTextButton("F2") { cb.onDispatchKey(0, VTERM_KEY_FUNCTION_0 + 2) }

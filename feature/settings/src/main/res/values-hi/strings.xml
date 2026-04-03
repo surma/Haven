@@ -32,8 +32,8 @@
     <string name="settings_title">सेटिंग्स</string>
 
     <!-- Security section -->
-    <string name="settings_biometric_title">बायोमेट्रिक अनलॉक</string>
-    <string name="settings_biometric_subtitle">Haven खोलने के लिए बायोमेट्रिक्स आवश्यक करें</string>
+    <string name="settings_biometric_title">स्क्रीन लॉक</string>
+    <string name="settings_biometric_subtitle">Haven खोलने के लिए प्रमाणीकरण आवश्यक करें</string>
     <string name="settings_lock_timeout_title">लॉक टाइमआउट</string>
     <string name="settings_prevent_screenshots_title">स्क्रीनशॉट रोकें</string>
     <string name="settings_prevent_screenshots_subtitle">स्क्रीन कैप्चर और टास्क स्विचर प्रीव्यू ब्लॉक करें</string>

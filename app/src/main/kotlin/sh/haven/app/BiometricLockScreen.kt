@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -66,8 +66,8 @@ fun BiometricLockScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                imageVector = Icons.Filled.Fingerprint,
-                contentDescription = "Biometric unlock",
+                imageVector = Icons.Filled.Lock,
+                contentDescription = "Screen lock",
                 modifier = Modifier.size(72.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )

@@ -32,8 +32,8 @@
     <string name="settings_title">Paramètres</string>
 
     <!-- Security section -->
-    <string name="settings_biometric_title">Déverrouillage biométrique</string>
-    <string name="settings_biometric_subtitle">Exiger la biométrie pour ouvrir Haven</string>
+    <string name="settings_biometric_title">Verrouillage de l\'écran</string>
+    <string name="settings_biometric_subtitle">Exiger une authentification pour ouvrir Haven</string>
     <string name="settings_lock_timeout_title">Délai de verrouillage</string>
     <string name="settings_prevent_screenshots_title">Empêcher les captures d\'écran</string>
     <string name="settings_prevent_screenshots_subtitle">Bloquer la capture d\'écran et l\'aperçu du gestionnaire de tâches</string>

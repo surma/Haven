@@ -22,6 +22,8 @@ enum class ToolbarKey(val id: String, val label: String, val isModifier: Boolean
     END("end", "End", isAction = true),
     PGUP("pgup", "PgUp", isAction = true),
     PGDN("pgdn", "PgDn", isAction = true),
+    INSERT("insert", "Ins", isAction = true),
+    DELETE("delete", "Del", isAction = true),
     F1("f1", "F1", isAction = true),
     F2("f2", "F2", isAction = true),
     F3("f3", "F3", isAction = true),
