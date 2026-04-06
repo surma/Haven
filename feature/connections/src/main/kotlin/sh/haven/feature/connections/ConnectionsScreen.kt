@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DesktopWindows
@@ -896,6 +897,7 @@ fun ConnectionsScreen(
                                     onRename = { newLabel -> viewModel.saveConnection(profile.copy(label = newLabel)) },
                                     onEdit = { editingProfileId = profile.id },
                                     onDelete = { viewModel.deleteConnection(profile.id) },
+                                    onDuplicate = { viewModel.duplicateConnection(profile.id) },
                                     onDisconnect = { viewModel.disconnect(profile.id) },
                                     onDeployKey = { deployingProfile = profile },
                                     onConnectWithPassword = { connectingProfile = profile },
@@ -973,6 +975,7 @@ fun ConnectionsScreen(
                                         onRename = { newLabel -> viewModel.saveConnection(dep.copy(label = newLabel)) },
                                         onEdit = { editingProfileId = dep.id },
                                         onDelete = { viewModel.deleteConnection(dep.id) },
+                                        onDuplicate = { viewModel.duplicateConnection(dep.id) },
                                         onDisconnect = { viewModel.disconnect(dep.id) },
                                         onDeployKey = { deployingProfile = dep },
                                         onConnectWithPassword = { connectingProfile = dep },
@@ -1076,6 +1079,7 @@ private fun ConnectionTreeItem(
     onRename: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
     onDisconnect: () -> Unit,
     onDeployKey: () -> Unit,
     onConnectWithPassword: () -> Unit,
@@ -1255,6 +1259,11 @@ private fun ConnectionTreeItem(
                 text = { Text(stringResource(R.string.common_edit)) },
                 leadingIcon = { Icon(Icons.Filled.Edit, null) },
                 onClick = { showMenu = false; onEdit() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.connections_menu_duplicate)) },
+                leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                onClick = { showMenu = false; onDuplicate() },
             )
             if (profile.isSsh) {
                 DropdownMenuItem(

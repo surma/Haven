@@ -664,6 +664,18 @@ class ConnectionsViewModel @Inject constructor(
         }
     }
 
+    fun duplicateConnection(id: String) {
+        viewModelScope.launch {
+            val profile = connections.value.find { it.id == id } ?: return@launch
+            val copy = profile.copy(
+                id = java.util.UUID.randomUUID().toString(),
+                label = "${profile.label} (copy)",
+                lastConnected = null,
+            )
+            repository.save(copy)
+        }
+    }
+
     fun deleteConnection(id: String) {
         viewModelScope.launch {
             sessionManagerRegistry.disconnectProfile(id)
