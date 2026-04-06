@@ -895,7 +895,7 @@ fun ConnectionsScreen(
                                     hasKeys = sshKeys.isNotEmpty(),
                                     hasDependents = profile.id in dependentsByParent,
                                     jumpHostLabel = profile.jumpProfileId?.let { profileMap[it]?.label },
-                                    onTap = { onTapProfile(profile, profileStatuses[profile.id], sshKeys, viewModel) { connectingProfile = profile } },
+                                    onTap = { onTapProfile(profile, profileStatuses[profile.id], sshKeys, viewModel, onNavigateToSmb, onNavigateToRclone) { connectingProfile = profile } },
                                     onRename = { newLabel -> viewModel.saveConnection(profile.copy(label = newLabel)) },
                                     onEdit = { editingProfileId = profile.id },
                                     onDelete = { viewModel.deleteConnection(profile.id) },
@@ -973,7 +973,7 @@ fun ConnectionsScreen(
                                         hasKeys = sshKeys.isNotEmpty(),
                                         hasDependents = false,
                                         jumpHostLabel = null,
-                                        onTap = { onTapProfile(dep, profileStatuses[dep.id], sshKeys, viewModel) { connectingProfile = dep } },
+                                        onTap = { onTapProfile(dep, profileStatuses[dep.id], sshKeys, viewModel, onNavigateToSmb, onNavigateToRclone) { connectingProfile = dep } },
                                         onRename = { newLabel -> viewModel.saveConnection(dep.copy(label = newLabel)) },
                                         onEdit = { editingProfileId = dep.id },
                                         onDelete = { viewModel.deleteConnection(dep.id) },
@@ -1028,11 +1028,17 @@ private fun onTapProfile(
     profileStatus: ProfileStatus?,
     sshKeys: List<sh.haven.core.data.db.entities.SshKey>,
     viewModel: ConnectionsViewModel,
+    onNavigateToSmb: (String) -> Unit,
+    onNavigateToRclone: (String) -> Unit,
     showPasswordDialog: () -> Unit,
 ) {
     if (profile.isLocal) {
         // Local: no auth needed, handles both fresh connect and re-navigate
         viewModel.connect(profile, "")
+    } else if (profileStatus == ProfileStatus.CONNECTED && profile.isRclone) {
+        onNavigateToRclone(profile.id)
+    } else if (profileStatus == ProfileStatus.CONNECTED && profile.isSmb) {
+        onNavigateToSmb(profile.id)
     } else if (profileStatus == ProfileStatus.CONNECTED) {
         // ensureShellForProfile navigates via _navigateToTerminal when ready
         // (handles jump host sessions that need shell setup or session picker)
