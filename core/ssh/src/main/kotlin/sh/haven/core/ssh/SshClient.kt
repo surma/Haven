@@ -37,6 +37,8 @@ class SshClient : Closeable {
     /** Set before connect() to capture verbose SSH protocol output. */
     var verboseLogger: SshVerboseLogger? = null
     private var session: Session? = null
+    /** Whether the active session should set agent forwarding on newly opened shell/exec channels. */
+    private var agentForwardingEnabled = false
 
     val isConnected: Boolean
         get() = session?.isConnected == true
@@ -103,6 +105,7 @@ class SshClient : Closeable {
 
         sess.connect(connectTimeoutMs)
         session = sess
+        registerAgentIdentities(config)
         extractHostKey(sess, config.host, config.port)
     }
 
@@ -118,6 +121,7 @@ class SshClient : Closeable {
         val sess = session ?: throw IllegalStateException("Not connected")
         val channel = sess.openChannel("shell") as ChannelShell
         channel.setPtyType(term, cols, rows, 0, 0)
+        if (agentForwardingEnabled) channel.setAgentForwarding(true)
         channel.connect()
         return channel
     }
@@ -148,6 +152,7 @@ class SshClient : Closeable {
         val sess = session ?: throw IllegalStateException("Not connected")
         val channel = sess.openChannel("exec") as ChannelExec
         channel.setCommand(command)
+        if (agentForwardingEnabled) channel.setAgentForwarding(true)
         channel.inputStream = null
 
         val stdout = channel.inputStream
@@ -222,7 +227,33 @@ class SshClient : Closeable {
 
         sess.connect(connectTimeoutMs)
         session = sess
+        registerAgentIdentities(config)
         return extractHostKey(sess, config.host, config.port)
+    }
+
+    /**
+     * Enable agent forwarding for this session and add the configured identities to the
+     * JSch-wide identity repository so JSch's ChannelAgentForwarding can answer forwarded
+     * SSH_AGENTC_REQUEST_IDENTITIES / SIGN_REQUEST messages from the remote.
+     *
+     * Must be called AFTER [Session.connect] so the identities are never tried as
+     * candidate keys during public-key auth — otherwise a profile with many stored keys
+     * could trip `MaxAuthTries` and be rejected with "Too many authentication failures".
+     */
+    private fun registerAgentIdentities(config: ConnectionConfig) {
+        agentForwardingEnabled = config.forwardAgent
+        if (!config.forwardAgent) return
+        if (config.agentIdentities.isEmpty()) {
+            Log.w(TAG, "Agent forwarding requested but no identities supplied — forwarded agent will be empty")
+            return
+        }
+        config.agentIdentities.forEachIndexed { i, (label, keyBytes) ->
+            try {
+                jsch.addIdentity("haven-agent-$i-$label", keyBytes, null, null)
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping agent key '$label' — could not parse: ${e.message}")
+            }
+        }
     }
 
     private fun extractHostKey(sess: Session, host: String, port: Int): KnownHostEntry {
@@ -275,6 +306,7 @@ class SshClient : Closeable {
     fun disconnect() {
         session?.disconnect()
         session = null
+        agentForwardingEnabled = false
         jsch.removeAllIdentity()
     }
 

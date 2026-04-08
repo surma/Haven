@@ -59,6 +59,8 @@ data class ConnectionProfile(
     val useAndroidShell: Boolean = false,
     /** Custom mosh-server command (overrides the default `mosh-server new -s -c 256 -l LANG=en_US.UTF-8`). */
     val moshServerCommand: String? = null,
+    /** Enable SSH agent forwarding (OpenSSH `ForwardAgent`) — exposes non-encrypted stored SSH keys to the remote session. */
+    val forwardAgent: Boolean = false,
 ) {
     enum class AuthType {
         PASSWORD,

@@ -87,7 +87,7 @@
 - [ ] **sshfs mounts** — mount remote filesystems inside PRoot
 
 ### Security
-- [ ] **Agent forwarding** — SSH agent for `git push` from remote servers
+- [x] **Agent forwarding** — SSH agent for `git push` from remote servers (v4.51.0, #75)
 
 ## Longer-term
 

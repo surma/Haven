@@ -175,4 +175,31 @@ class ConnectionConfigTest {
         )
         assertEquals(auth, config.authMethod)
     }
+
+    // Agent forwarding
+
+    @Test
+    fun `forwardAgent defaults to false`() {
+        val config = ConnectionConfig(host = "example.com", username = "root")
+        assert(!config.forwardAgent)
+        assertEquals(0, config.agentIdentities.size)
+    }
+
+    @Test
+    fun `forwardAgent carries agent identities`() {
+        val keys = listOf(
+            "work" to byteArrayOf(1, 2, 3),
+            "personal" to byteArrayOf(4, 5, 6),
+        )
+        val config = ConnectionConfig(
+            host = "example.com",
+            username = "root",
+            forwardAgent = true,
+            agentIdentities = keys,
+        )
+        assertTrue(config.forwardAgent)
+        assertEquals(2, config.agentIdentities.size)
+        assertEquals("work", config.agentIdentities[0].first)
+        assertTrue(config.agentIdentities[1].second.contentEquals(byteArrayOf(4, 5, 6)))
+    }
 }

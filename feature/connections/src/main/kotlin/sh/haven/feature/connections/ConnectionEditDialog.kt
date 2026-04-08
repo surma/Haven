@@ -147,6 +147,7 @@ fun ConnectionEditDialog(
     var moshServerCommand by rememberSaveable { mutableStateOf(existing?.moshServerCommand ?: "") }
     var disableAltScreen by rememberSaveable { mutableStateOf(existing?.disableAltScreen ?: false) }
     var useAndroidShell by rememberSaveable { mutableStateOf(existing?.useAndroidShell ?: false) }
+    var forwardAgent by rememberSaveable { mutableStateOf(existing?.forwardAgent ?: false) }
     var selectedSessionManager by rememberSaveable { mutableStateOf(existing?.sessionManager) }
     var etPort by rememberSaveable { mutableStateOf(existing?.etPort?.toString() ?: "2022") }
     var localSideband by rememberSaveable {
@@ -1265,6 +1266,21 @@ fun ConnectionEditDialog(
                         )
                     }
 
+                    // Agent forwarding toggle (OpenSSH ForwardAgent)
+                    Spacer(Modifier.height(4.dp))
+                    FilterChip(
+                        selected = forwardAgent,
+                        onClick = { forwardAgent = !forwardAgent },
+                        label = { Text("Forward SSH agent") },
+                    )
+                    if (forwardAgent) {
+                        Text(
+                            "Exposes non-encrypted stored SSH keys to the remote host (for git push etc.). Encrypted keys are skipped.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
                     // SSH key selector
                     if (sshKeys.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
@@ -1542,6 +1558,7 @@ fun ConnectionEditDialog(
                             moshServerCommand = moshServerCommand.ifBlank { null },
                             disableAltScreen = disableAltScreen,
                             useAndroidShell = useAndroidShell,
+                            forwardAgent = forwardAgent,
                             sessionManager = selectedSessionManager,
                             useMosh = selectedTransport == "MOSH",
                             useEternalTerminal = selectedTransport == "ET",

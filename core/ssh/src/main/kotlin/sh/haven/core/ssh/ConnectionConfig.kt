@@ -6,6 +6,14 @@ data class ConnectionConfig(
     val username: String,
     val authMethod: AuthMethod = AuthMethod.Password(""),
     val sshOptions: Map<String, String> = emptyMap(),
+    /** Enable SSH agent forwarding (OpenSSH `ForwardAgent`). */
+    val forwardAgent: Boolean = false,
+    /**
+     * Keys to expose via the forwarded agent channel. Each pair is (label, private key bytes).
+     * Only consulted when [forwardAgent] is true. Encrypted keys must be excluded by the caller
+     * — JSch's ChannelAgentForwarding silently skips identities whose `isEncrypted()` returns true.
+     */
+    val agentIdentities: List<Pair<String, ByteArray>> = emptyList(),
 ) {
     init {
         require(host.isNotBlank()) { "Host must not be blank" }

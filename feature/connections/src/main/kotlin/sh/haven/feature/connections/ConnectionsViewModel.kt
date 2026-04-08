@@ -1102,6 +1102,8 @@ class ConnectionsViewModel @Inject constructor(
                         username = profile.username,
                         authMethod = authMethod,
                         sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
+                        forwardAgent = profile.forwardAgent,
+                        agentIdentities = agentIdentitiesFor(profile),
                     )
 
                     // Create proxy — jump host takes priority, then SOCKS/HTTP proxy
@@ -1299,6 +1301,8 @@ class ConnectionsViewModel @Inject constructor(
                         username = profile.username,
                         authMethod = authMethod,
                         sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
+                        forwardAgent = profile.forwardAgent,
+                        agentIdentities = agentIdentitiesFor(profile),
                     )
 
                     val sshClient = SshClient().apply {
@@ -1430,6 +1434,8 @@ class ConnectionsViewModel @Inject constructor(
                         username = profile.username,
                         authMethod = authMethod,
                         sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
+                        forwardAgent = profile.forwardAgent,
+                        agentIdentities = agentIdentitiesFor(profile),
                     )
 
                     val sshClient = SshClient().apply {
@@ -2143,6 +2149,18 @@ class ConnectionsViewModel @Inject constructor(
     }
 
     /**
+     * Build the list of identities to expose via SSH agent forwarding for [profile].
+     * Returns empty list when `profile.forwardAgent` is false. Encrypted keys are skipped
+     * — unlocking them at sign-request time would require re-prompting the user mid-session.
+     */
+    private suspend fun agentIdentitiesFor(profile: ConnectionProfile): List<Pair<String, ByteArray>> {
+        if (!profile.forwardAgent) return emptyList()
+        return sshKeyRepository.getAllDecrypted()
+            .filter { !it.isEncrypted }
+            .map { key -> key.label to rawKeyToPem(key.privateKeyBytes, key.keyType) }
+    }
+
+    /**
      * Convert raw private key bytes to PEM format that JSch can parse.
      * Delegates to SshKeyExporter which handles all formats correctly:
      * - PEM/OpenSSH: pass through
@@ -2593,6 +2611,8 @@ class ConnectionsViewModel @Inject constructor(
                     username = profile.username,
                     authMethod = authMethod,
                     sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
+                    forwardAgent = profile.forwardAgent,
+                    agentIdentities = agentIdentitiesFor(profile),
                 )
                 val proxy = if (jumpSessionId != null) {
                     sshSessionManager.createProxyJump(jumpSessionId)
@@ -2650,6 +2670,8 @@ class ConnectionsViewModel @Inject constructor(
                     username = profile.username,
                     authMethod = authMethod,
                     sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
+                    forwardAgent = profile.forwardAgent,
+                    agentIdentities = agentIdentitiesFor(profile),
                 )
                 val sshClient = SshClient().apply {
                     this.verboseLogger = verboseLogger
@@ -2700,6 +2722,8 @@ class ConnectionsViewModel @Inject constructor(
                     username = profile.username,
                     authMethod = authMethod,
                     sshOptions = ConnectionConfig.parseSshOptions(profile.sshOptions),
+                    forwardAgent = profile.forwardAgent,
+                    agentIdentities = agentIdentitiesFor(profile),
                 )
                 val sshClient = SshClient().apply {
                     this.verboseLogger = verboseLogger
