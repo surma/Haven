@@ -275,6 +275,43 @@ build_vpx() {
     echo "  libvpx built"
 }
 
+build_freetype() {
+    fetch_tarball freetype \
+        "https://downloads.sourceforge.net/project/freetype/freetype2/2.13.3/freetype-2.13.3.tar.xz" \
+        "freetype-2.13.3.tar.xz" "freetype-2.13.3"
+    build_autotools freetype "$DEPS_SYSROOT/lib/libfreetype.a" \
+        --without-harfbuzz --without-bzip2 --without-png \
+        --without-brotli --without-zlib
+}
+
+build_fribidi() {
+    fetch_tarball fribidi \
+        "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz" \
+        "fribidi-1.0.16.tar.xz" "fribidi-1.0.16"
+    build_autotools fribidi "$DEPS_SYSROOT/lib/libfribidi.a" \
+        --disable-docs --disable-tests
+}
+
+build_harfbuzz() {
+    # Harfbuzz 9.x dropped autotools — pinned to 8.5.0 (the last autotools
+    # release) so we don't have to wire up a meson toolchain file.
+    # Freetype must already be built so harfbuzz can find it via pkg-config.
+    fetch_tarball harfbuzz \
+        "https://github.com/harfbuzz/harfbuzz/releases/download/8.5.0/harfbuzz-8.5.0.tar.xz" \
+        "harfbuzz-8.5.0.tar.xz" "harfbuzz-8.5.0"
+    build_autotools harfbuzz "$DEPS_SYSROOT/lib/libharfbuzz.a" \
+        --with-freetype --without-glib --without-icu --without-cairo \
+        --disable-introspection
+}
+
+build_libass() {
+    fetch_tarball libass \
+        "https://github.com/libass/libass/releases/download/0.17.3/libass-0.17.3.tar.xz" \
+        "libass-0.17.3.tar.xz" "libass-0.17.3"
+    build_autotools libass "$DEPS_SYSROOT/lib/libass.a" \
+        --disable-require-system-font-provider
+}
+
 build_x265() {
     local marker="$DEPS_SYSROOT/lib/libx265.a"
     if [ -f "$marker" ] && [ "${FORCE_REBUILD:-}" != "1" ]; then
@@ -317,6 +354,7 @@ build_x265() {
 }
 
 # --- Build external deps -------------------------------------------------
+# Order matters: later deps use pkg-config to discover earlier ones.
 build_x264
 build_mp3lame
 build_opus
@@ -324,6 +362,10 @@ build_libogg
 build_libvorbis
 build_vpx
 build_x265
+build_freetype
+build_fribidi
+build_harfbuzz
+build_libass
 
 # --- Fetch FFmpeg source (shallow clone, throwaway) ---------------------
 mkdir -p "$SCRIPT_DIR/src"
@@ -389,6 +431,10 @@ EXTRA_LDFLAGS="-pie -Wl,-z,max-page-size=16384 -L$DEPS_SYSROOT/lib"
         --enable-libmp3lame \
         --enable-libopus \
         --enable-libvorbis \
+        --enable-libfreetype \
+        --enable-libfribidi \
+        --enable-libharfbuzz \
+        --enable-libass \
         --disable-doc \
         --disable-htmlpages \
         --disable-manpages \
@@ -451,6 +497,9 @@ EXTRA_LDFLAGS="-pie -Wl,-z,max-page-size=16384 -L$DEPS_SYSROOT/lib"
         --enable-filter=aformat \
         --enable-filter=format \
         --enable-filter=aresample \
+        --enable-filter=ass \
+        --enable-filter=subtitles \
+        --enable-filter=drawtext \
         --enable-bsf=h264_mp4toannexb \
         --enable-bsf=hevc_mp4toannexb \
         --enable-bsf=aac_adtstoasc \
@@ -490,9 +539,13 @@ if command -v readelf >/dev/null 2>&1; then
         # -W = wide output, Align is the last column of the LOAD row
         align=$(readelf -lW "$BIN_DIR/$f" 2>/dev/null \
             | awk '/^  LOAD/ {print $NF; exit}')
-        echo "  $f LOAD alignment: $align (need 0x4000 for Android 15)"
-        if [ "$align" != "0x4000" ]; then
-            echo "    WARNING: expected 0x4000" >&2
+        # Android 15 requires >= 16 KB (0x4000). Bigger (e.g. 0x10000 = 64 KB)
+        # is also fine since any multiple-of-64KB address is also 16KB-aligned.
+        align_dec=$((align))
+        if [ "$align_dec" -ge 16384 ]; then
+            echo "  $f LOAD alignment: $align (OK: >= 16 KB)"
+        else
+            echo "  $f LOAD alignment: $align (FAIL: < 16 KB)" >&2
         fi
     done
 else
