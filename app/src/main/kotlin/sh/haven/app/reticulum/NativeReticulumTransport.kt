@@ -13,6 +13,7 @@ import network.reticulum.identity.Identity
 import network.reticulum.interfaces.local.LocalClientInterface
 import network.reticulum.interfaces.tcp.TCPClientInterface
 import network.reticulum.interfaces.toRef
+import network.reticulum.transport.RichAnnounceHandler
 import network.reticulum.transport.Transport
 import sh.haven.core.reticulum.DiscoveredDestination
 import sh.haven.core.reticulum.ReticulumTransport
@@ -47,6 +48,32 @@ class NativeReticulumTransport @Inject constructor() : ReticulumTransport {
         _discovered.asStateFlow()
 
     private var clientIdentity: Identity? = null
+
+    /** Announce handler that collects rnsh destinations into the StateFlow. */
+    private val rnshAnnounceHandler = object : RichAnnounceHandler {
+        override fun handleAnnounceWithContext(
+            destinationHash: ByteArray,
+            announcedIdentity: Identity,
+            appData: ByteArray?,
+            hops: Int,
+            receivingInterfaceName: String?,
+            matchedAspect: String?,
+        ): Boolean {
+            val hash = destinationHash.joinToString("") { "%02x".format(it) }
+            Log.d(TAG, "rnsh announce: $hash (${hops} hops, via $receivingInterfaceName)")
+
+            val dest = DiscoveredDestination(
+                hash = hash,
+                hops = hops,
+            )
+
+            _discovered.value = (_discovered.value
+                .filter { it.hash != hash } + dest)
+                .sortedBy { it.hops }
+
+            return true
+        }
+    }
 
     override suspend fun init(
         configDir: String,
@@ -100,6 +127,14 @@ class NativeReticulumTransport @Inject constructor() : ReticulumTransport {
         }
 
         clientIdentity = Identity.create()
+
+        // Register rnsh announce handler for destination discovery
+        Transport.registerAnnounceHandler(
+            handler = rnshAnnounceHandler,
+            aspectFilter = "rnsh",
+        )
+        Log.d(TAG, "Registered rnsh announce handler")
+
         initialised = true
         val hexHash = clientIdentity?.hexHash ?: ""
         Log.d(TAG, "init complete, identity=$hexHash")

@@ -116,6 +116,13 @@ class ConnectionsViewModel @Inject constructor(
                 .debounce(500L)
                 .collect { updateServiceNotification() }
         }
+
+        // Reactively forward transport's discovered destinations to the UI
+        viewModelScope.launch {
+            reticulumTransport.discoveredDestinations.collect { list ->
+                _discoveredDestinations.value = list
+            }
+        }
     }
 
     val connections: StateFlow<List<ConnectionProfile>> = repository.observeAll()
