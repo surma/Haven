@@ -462,11 +462,37 @@ class ConnectionsViewModel @Inject constructor(
     private val _discoveredDestinations = MutableStateFlow<List<DiscoveredDestination>>(emptyList())
     val discoveredDestinations: StateFlow<List<DiscoveredDestination>> = _discoveredDestinations.asStateFlow()
 
-    init {
-        // Reactively forward transport's discovered destinations to the UI
-        viewModelScope.launch {
-            reticulumTransport.discoveredDestinations.collect { list ->
-                _discoveredDestinations.value = list
+    private val _reticulumScanning = MutableStateFlow(false)
+    val reticulumScanning: StateFlow<Boolean> = _reticulumScanning.asStateFlow()
+
+    /**
+     * Scan for rnsh nodes by initialising Reticulum with the given gateway
+     * and waiting for announces. Called from the edit dialog's Scan button.
+     */
+    fun scanReticulumDestinations(host: String, port: Int, networkName: String?, passphrase: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _reticulumScanning.value = true
+            try {
+                val configDir = File(appContext.filesDir, "reticulum")
+                    .apply { mkdirs() }.absolutePath
+                reticulumTransport.init(configDir, host, port, networkName, passphrase)
+
+                // Collect announces for a few seconds
+                val job = launch {
+                    reticulumTransport.discoveredDestinations.collect { list ->
+                        _discoveredDestinations.value = list
+                    }
+                }
+                kotlinx.coroutines.delay(5000)
+                job.cancel()
+
+                // Final snapshot
+                _discoveredDestinations.value = reticulumTransport.discoveredDestinations.value
+                Log.d(TAG, "Scan complete: ${_discoveredDestinations.value.size} destinations found")
+            } catch (e: Exception) {
+                Log.e(TAG, "scanReticulumDestinations failed", e)
+            } finally {
+                _reticulumScanning.value = false
             }
         }
     }
@@ -541,18 +567,8 @@ class ConnectionsViewModel @Inject constructor(
     fun refreshDiscoveredDestinations() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Speculatively connect to Sideband if RNS isn't initialised yet
                 if (!reticulumTransport.isInitialised) {
-                    Log.d(TAG, "RNS not initialised, probing for Sideband...")
-                    val configDir = File(appContext.filesDir, "reticulum")
-                        .apply { mkdirs() }.absolutePath
-                    val probeResult = reticulumTransport.probeSideband(configDir)
-                    Log.d(TAG, "probeSideband result: $probeResult, isInitialised: ${reticulumTransport.isInitialised}")
-                } else {
-                    Log.d(TAG, "RNS already initialised")
-                }
-                if (!reticulumTransport.isInitialised) {
-                    Log.d(TAG, "RNS still not initialised after probe, skipping destination refresh")
+                    Log.d(TAG, "RNS not initialised, skipping destination refresh")
                     return@launch
                 }
 

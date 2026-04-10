@@ -185,6 +185,7 @@ fun ConnectionsScreen(
     val globalSessionManagerLabel by viewModel.globalSessionManagerLabel.collectAsState()
     val newSessionProfileId by viewModel.newSessionProfileId.collectAsState()
     val subnetScanning by viewModel.subnetScanning.collectAsState()
+    val reticulumScanning by viewModel.reticulumScanning.collectAsState()
     val discoveredSmbHosts by viewModel.discoveredSmbHosts.collectAsState()
     val smbSubnetScanning by viewModel.smbSubnetScanning.collectAsState()
     val showMoshSetupGuide by viewModel.showMoshSetupGuide.collectAsState()
@@ -407,8 +408,12 @@ fun ConnectionsScreen(
             globalSessionManagerLabel = globalSessionManagerLabel,
             subnetScanning = subnetScanning,
             smbSubnetScanning = smbSubnetScanning,
+            reticulumScanning = reticulumScanning,
             onScanSubnet = { viewModel.scanSubnet() },
             onScanSubnetSmb = { viewModel.scanSubnetSmb() },
+            onScanReticulum = { host, port, netName, passphrase ->
+                viewModel.scanReticulumDestinations(host, port, netName, passphrase)
+            },
             onDismiss = { showAddDialog = false },
             onSave = { profile ->
                 viewModel.saveConnection(profile)
@@ -501,8 +506,12 @@ fun ConnectionsScreen(
             globalSessionManagerLabel = globalSessionManagerLabel,
             subnetScanning = subnetScanning,
             smbSubnetScanning = smbSubnetScanning,
+            reticulumScanning = reticulumScanning,
             onScanSubnet = { viewModel.scanSubnet() },
             onScanSubnetSmb = { viewModel.scanSubnetSmb() },
+            onScanReticulum = { host, port, netName, passphrase ->
+                viewModel.scanReticulumDestinations(host, port, netName, passphrase)
+            },
             onDismiss = { editingProfileId = null },
             onSave = { updated ->
                 viewModel.saveConnection(updated)

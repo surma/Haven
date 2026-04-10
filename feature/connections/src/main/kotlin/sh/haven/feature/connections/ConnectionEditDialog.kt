@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -83,8 +84,10 @@ fun ConnectionEditDialog(
     globalSessionManagerLabel: String = "None",
     subnetScanning: Boolean = false,
     smbSubnetScanning: Boolean = false,
+    reticulumScanning: Boolean = false,
     onScanSubnet: () -> Unit = {},
     onScanSubnetSmb: () -> Unit = {},
+    onScanReticulum: (host: String, port: Int, networkName: String?, passphrase: String?) -> Unit = { _, _, _, _ -> },
     onDismiss: () -> Unit,
     onSave: (ConnectionProfile) -> Unit,
 ) {
@@ -1335,6 +1338,34 @@ fun ConnectionEditDialog(
                         }
                     }
                 } else {
+                    // Scan button to discover rnsh destinations
+                    OutlinedButton(
+                        onClick = {
+                            val scanHost = if (localSideband) "127.0.0.1" else rnsHost
+                            val scanPort = if (localSideband) 37428 else (rnsPort.toIntOrNull() ?: 4242)
+                            onScanReticulum(
+                                scanHost,
+                                scanPort,
+                                rnsNetworkName.ifBlank { null },
+                                rnsPassphrase.ifBlank { null },
+                            )
+                        },
+                        enabled = !reticulumScanning,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (reticulumScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Scanning...")
+                        } else {
+                            Text("Scan for rnsh nodes")
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+
                     // Discovered destinations — filter by typed prefix, cap at 8
                     val filtered = remember(discoveredDestinations, destinationHash) {
                         val prefix = destinationHash.lowercase()
