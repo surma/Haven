@@ -476,7 +476,11 @@ class ConnectionsViewModel @Inject constructor(
                 val configDir = File(appContext.filesDir, "reticulum")
                     .apply { mkdirs() }.absolutePath
                 reticulumTransport.init(configDir, host, port, networkName, passphrase)
-                Log.d(TAG, "scanReticulum: transport initialised, waiting for announces...")
+                Log.d(TAG, "scanReticulum: transport initialised, waiting for gateway stabilisation...")
+
+                // Wait for the gateway's IFAC handshake and tunnel synthesis
+                // to complete before starting the announce collection window.
+                kotlinx.coroutines.delay(5000)
 
                 // Also request paths for any saved rnsh destinations — this
                 // triggers the gateway to forward cached announces/paths.
