@@ -1213,7 +1213,7 @@ class ConnectionsViewModel @Inject constructor(
 
                     val sshSessionMgr = resolveSessionManager(profile)
                     val cmdOverride = preferencesRepository.sessionCommandOverride.first()
-                    sshSessionManager.storeConnectionConfig(sessionId, config, sshSessionMgr, cmdOverride)
+                    sshSessionManager.storeConnectionConfig(sessionId, config, sshSessionMgr, cmdOverride, profile.postLoginCommand, profile.postLoginBeforeSessionManager)
                     sshSessionMgr
                 }
 
@@ -1616,7 +1616,7 @@ class ConnectionsViewModel @Inject constructor(
                     val cmdOverride = withContext(Dispatchers.IO) {
                         preferencesRepository.sessionCommandOverride.first()
                     }
-                    sshSessionManager.storeConnectionConfig(newSessionId, config, manager, cmdOverride)
+                    sshSessionManager.storeConnectionConfig(newSessionId, config, manager, cmdOverride, profile.postLoginCommand)
                     sshSessionManager.setChosenSessionName(newSessionId, name)
                     finishConnect(newSessionId, profileId, silent = true)
                 }
@@ -2276,7 +2276,7 @@ class ConnectionsViewModel @Inject constructor(
                 val cmdOverride = preferencesRepository.sessionCommandOverride.first()
                 val config = session.connectionConfig
                 if (config != null) {
-                    sshSessionManager.storeConnectionConfig(session.sessionId, config, sshSessionMgr, cmdOverride)
+                    sshSessionManager.storeConnectionConfig(session.sessionId, config, sshSessionMgr, cmdOverride, profile?.postLoginCommand, profile?.postLoginBeforeSessionManager ?: false)
                 }
 
                 // Check for existing tmux/screen sessions
@@ -2698,7 +2698,7 @@ class ConnectionsViewModel @Inject constructor(
 
                 val sshSessionMgr = resolveSessionManager(profile)
                 val cmdOverride = preferencesRepository.sessionCommandOverride.first()
-                sshSessionManager.storeConnectionConfig(sessionId, config, sshSessionMgr, cmdOverride)
+                sshSessionManager.storeConnectionConfig(sessionId, config, sshSessionMgr, cmdOverride, profile.postLoginCommand, profile.postLoginBeforeSessionManager)
             }
 
             verboseLogger?.drain()?.let { pendingVerboseLogs[sessionId] = it }

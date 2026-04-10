@@ -20,7 +20,7 @@ import sh.haven.core.data.db.entities.SshKey
         SshKey::class,
         PortForwardRule::class,
     ],
-    version = 29,
+    version = 31,
     exportSchema = true,
 )
 abstract class HavenDatabase : RoomDatabase() {
@@ -248,6 +248,18 @@ abstract class HavenDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE connection_profiles ADD COLUMN reticulumNetworkName TEXT")
                 db.execSQL("ALTER TABLE connection_profiles ADD COLUMN reticulumPassphrase TEXT")
+            }
+        }
+
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE connection_profiles ADD COLUMN postLoginCommand TEXT")
+            }
+        }
+
+        val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE connection_profiles ADD COLUMN postLoginBeforeSessionManager INTEGER NOT NULL DEFAULT 1")
             }
         }
     }

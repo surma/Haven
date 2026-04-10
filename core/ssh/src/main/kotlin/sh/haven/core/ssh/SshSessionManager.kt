@@ -50,6 +50,8 @@ class SshSessionManager @Inject constructor(
         val sessionManager: SessionManager = SessionManager.NONE,
         val sessionCommandOverride: String? = null,
         val chosenSessionName: String? = null,
+        val postLoginCommand: String? = null,
+        val postLoginBeforeSessionManager: Boolean = false,
         val activeForwards: List<PortForwardInfo> = emptyList(),
         /** Session ID of the jump host session, if this connection goes through one. */
         val jumpSessionId: String? = null,
@@ -97,6 +99,8 @@ class SshSessionManager @Inject constructor(
         config: ConnectionConfig,
         sessionMgr: SessionManager,
         sessionCommandOverride: String? = null,
+        postLoginCommand: String? = null,
+        postLoginBeforeSessionManager: Boolean = true,
     ) {
         _sessions.update { map ->
             val existing = map[sessionId] ?: return@update map
@@ -104,6 +108,8 @@ class SshSessionManager @Inject constructor(
                 connectionConfig = config,
                 sessionManager = sessionMgr,
                 sessionCommandOverride = sessionCommandOverride,
+                postLoginCommand = postLoginCommand,
+                postLoginBeforeSessionManager = postLoginBeforeSessionManager,
             ))
         }
     }
@@ -144,7 +150,7 @@ class SshSessionManager @Inject constructor(
     ): TerminalSession? {
         val session = _sessions.value[sessionId] ?: return null
         val channel = session.shellChannel ?: return null
-        val pendingCmd = buildSessionManagerCommand(sessionId, session.sessionManager)
+        val pendingCmds = buildPendingCommands(sessionId, session.sessionManager, session.postLoginCommand, session.postLoginBeforeSessionManager)
         val termSession = TerminalSession(
             sessionId = sessionId,
             profileId = session.profileId,
@@ -166,7 +172,7 @@ class SshSessionManager @Inject constructor(
                     }
                 }
             },
-            pendingCommand = pendingCmd,
+            pendingCommands = pendingCmds,
         )
         attachTerminalSession(sessionId, termSession)
         return termSession
@@ -348,9 +354,10 @@ class SshSessionManager @Inject constructor(
 
                 // Swap channel in the terminal session and restart reader
                 val termSession = _sessions.value[sessionId]?.terminalSession
-                val pendingCmd = buildSessionManagerCommand(sessionId, sessionMgr)
-                if (pendingCmd != null) {
-                    termSession?.pendingCommand = pendingCmd
+                val sess = _sessions.value[sessionId]
+                val pendingCmds = buildPendingCommands(sessionId, sessionMgr, sess?.postLoginCommand, sess?.postLoginBeforeSessionManager ?: false)
+                if (pendingCmds.isNotEmpty()) {
+                    termSession?.setPendingCommands(pendingCmds)
                 }
                 termSession?.reconnect(channel, newClient)
 
@@ -546,6 +553,29 @@ class SshSessionManager @Inject constructor(
             map + (sessionId to existing.copy(
                 activeForwards = existing.activeForwards.filter { it.ruleId != forward.ruleId },
             ))
+        }
+    }
+
+    /**
+     * Build the list of commands to send after login. Each fires on the next
+     * detected shell prompt. By default: session manager first, then post-login
+     * command (runs inside the session manager). When [beforeSessionManager] is
+     * true, the post-login command runs first (in the raw SSH shell).
+     */
+    private fun buildPendingCommands(
+        sessionId: String,
+        manager: SessionManager,
+        postLoginCommand: String?,
+        beforeSessionManager: Boolean = false,
+    ): List<String> = buildList {
+        val sessionCmd = buildSessionManagerCommand(sessionId, manager)
+        val loginCmd = postLoginCommand?.takeIf { it.isNotBlank() }
+        if (beforeSessionManager) {
+            loginCmd?.let { add(it) }
+            sessionCmd?.let { add(it) }
+        } else {
+            sessionCmd?.let { add(it) }
+            loginCmd?.let { add(it) }
         }
     }
 

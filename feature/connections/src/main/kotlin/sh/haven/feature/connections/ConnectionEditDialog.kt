@@ -148,6 +148,8 @@ fun ConnectionEditDialog(
     var keyId by rememberSaveable { mutableStateOf(existing?.keyId) }
     var sshOptions by rememberSaveable { mutableStateOf(existing?.sshOptions ?: "") }
     var moshServerCommand by rememberSaveable { mutableStateOf(existing?.moshServerCommand ?: "") }
+    var postLoginCommand by rememberSaveable { mutableStateOf(existing?.postLoginCommand ?: "") }
+    var postLoginBeforeSessionManager by rememberSaveable { mutableStateOf(existing?.postLoginBeforeSessionManager ?: true) }
     var disableAltScreen by rememberSaveable { mutableStateOf(existing?.disableAltScreen ?: false) }
     var useAndroidShell by rememberSaveable { mutableStateOf(existing?.useAndroidShell ?: false) }
     var forwardAgent by rememberSaveable { mutableStateOf(existing?.forwardAgent ?: false) }
@@ -1256,6 +1258,35 @@ fun ConnectionEditDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
 
+                    // Post-login command
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = postLoginCommand,
+                        onValueChange = { postLoginCommand = it },
+                        label = { Text("Post-login command") },
+                        placeholder = { Text("cd /app && clear") },
+                        supportingText = {
+                            Text(
+                                if (postLoginCommand.isNotBlank() && postLoginBeforeSessionManager) {
+                                    "Runs before session manager starts."
+                                } else {
+                                    "Sent after login."
+                                },
+                            )
+                        },
+                        singleLine = false,
+                        minLines = 1,
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (postLoginCommand.isNotBlank()) {
+                        FilterChip(
+                            selected = postLoginBeforeSessionManager,
+                            onClick = { postLoginBeforeSessionManager = !postLoginBeforeSessionManager },
+                            label = { Text("Run before session manager") },
+                        )
+                    }
+
                     // Alternate screen buffer toggle
                     Spacer(Modifier.height(4.dp))
                     FilterChip(
@@ -1474,6 +1505,20 @@ fun ConnectionEditDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+
+                    // Post-login command
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = postLoginCommand,
+                        onValueChange = { postLoginCommand = it },
+                        label = { Text("Post-login command") },
+                        placeholder = { Text("cd /app && clear") },
+                        supportingText = { Text("Sent after login.") },
+                        singleLine = false,
+                        minLines = 1,
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         },
@@ -1614,6 +1659,8 @@ fun ConnectionEditDialog(
                             keyId = keyId,
                             sshOptions = sshOptions.ifBlank { null },
                             moshServerCommand = moshServerCommand.ifBlank { null },
+                            postLoginCommand = postLoginCommand.ifBlank { null },
+                            postLoginBeforeSessionManager = postLoginBeforeSessionManager,
                             disableAltScreen = disableAltScreen,
                             useAndroidShell = useAndroidShell,
                             forwardAgent = forwardAgent,
@@ -1643,6 +1690,8 @@ fun ConnectionEditDialog(
                             reticulumPort = savedPort,
                             reticulumNetworkName = rnsNetworkName.ifBlank { null },
                             reticulumPassphrase = rnsPassphrase.ifBlank { null },
+                            postLoginCommand = postLoginCommand.ifBlank { null },
+                            postLoginBeforeSessionManager = postLoginBeforeSessionManager,
                             colorTag = colorTag,
                             groupId = groupId,
                         )

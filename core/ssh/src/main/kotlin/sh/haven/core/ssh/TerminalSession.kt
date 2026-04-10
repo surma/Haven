@@ -26,8 +26,19 @@ class TerminalSession(
     @Volatile private var client: SshClient,
     @Volatile private var onDataReceived: (ByteArray, Int, Int) -> Unit,
     private val onDisconnected: ((cleanExit: Boolean) -> Unit)? = null,
-    @Volatile var pendingCommand: String? = null,
+    pendingCommands: List<String> = emptyList(),
 ) : Closeable {
+
+    /** Queue of commands to send one-by-one as shell prompts are detected. */
+    private val _pendingCommands: MutableList<String> = pendingCommands.toMutableList()
+
+    /** Replace the pending command queue (used on reconnect). */
+    fun setPendingCommands(commands: List<String>) {
+        synchronized(_pendingCommands) {
+            _pendingCommands.clear()
+            _pendingCommands.addAll(commands)
+        }
+    }
 
     @Volatile private var sshInput: InputStream = channel.inputStream
     @Volatile private var sshOutput: OutputStream = channel.outputStream
@@ -82,21 +93,28 @@ class TerminalSession(
                 if (bytesRead > 0) {
                     onDataReceived(buffer, 0, bytesRead)
 
-                    // After delivering output, check if we have a pending session
-                    // manager command to send once the shell prompt appears.
+                    // After delivering output, check if we have pending commands
+                    // to send once a shell prompt appears.
                     // Strip ANSI/OSC escape sequences before checking for prompt chars,
                     // since shell integration (OSC 133) wraps the prompt in escape codes
                     // that would mask the trailing $ / # / % / > character.
-                    if (!pendingSent && pendingCommand != null) {
+                    // Check each line individually: tmux status bars or other
+                    // output after the prompt would mask the prompt char if we
+                    // only checked the last character of the entire chunk.
+                    val hasCmd = synchronized(_pendingCommands) { _pendingCommands.isNotEmpty() }
+                    if (hasCmd) {
                         val raw = String(buffer, 0, bytesRead)
-                        val stripped = raw.replace(Regex("\u001b(?:\\[[^a-zA-Z]*[a-zA-Z]|][^\u0007]*\u0007)"), "").trimEnd()
-                        if (stripped.isNotEmpty()) {
-                            val last = stripped.last()
-                            if (last == '$' || last == '#' || last == '%' || last == '>') {
-                                Log.d(TAG, "Shell prompt detected ('$last'), sending pending command")
-                                sendToSsh((pendingCommand!! + "\n").toByteArray())
-                                pendingCommand = null
-                                pendingSent = true
+                        val stripped = raw.replace(Regex("\u001b(?:\\[[^a-zA-Z]*[a-zA-Z]|][^\u0007]*\u0007|[()][A-Za-z])"), "")
+                        val promptChar = stripped.split('\n')
+                            .map { it.trimEnd() }
+                            .filter { it.isNotEmpty() }
+                            .mapNotNull { line -> line.last().takeIf { it == '$' || it == '#' || it == '%' || it == '>' || it == '\u276F' /* ❯ */ } }
+                            .firstOrNull()
+                        if (promptChar != null) {
+                            val cmd = synchronized(_pendingCommands) { _pendingCommands.removeFirstOrNull() }
+                            if (cmd != null) {
+                                Log.d(TAG, "Shell prompt detected ('$promptChar'), sending pending command")
+                                sendToSsh((cmd + "\n").toByteArray())
                             }
                         }
                     }

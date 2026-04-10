@@ -65,6 +65,10 @@ data class ConnectionProfile(
     val reticulumNetworkName: String? = null,
     /** IFAC passphrase for Reticulum gateway isolation (maps to ifacNetkey). */
     val reticulumPassphrase: String? = null,
+    /** Command to send automatically after SSH login (e.g. "cd /app && clear"). */
+    val postLoginCommand: String? = null,
+    /** When true, post-login command runs before the session manager (default); when false, runs inside it. */
+    val postLoginBeforeSessionManager: Boolean = true,
 ) {
     enum class AuthType {
         PASSWORD,
