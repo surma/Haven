@@ -74,7 +74,7 @@ private val EDIT_DIALOG_COLORS = listOf(
 @Composable
 fun ConnectionEditDialog(
     existing: ConnectionProfile? = null,
-    discoveredDestinations: List<ConnectionsViewModel.DiscoveredDestination> = emptyList(),
+    discoveredDestinations: List<sh.haven.core.reticulum.DiscoveredDestination> = emptyList(),
     discoveredHosts: List<DiscoveredHost> = emptyList(),
     discoveredSmbHosts: List<DiscoveredHost> = emptyList(),
     sshProfiles: List<ConnectionProfile> = emptyList(),

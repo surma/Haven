@@ -140,6 +140,18 @@ class NativeReticulumTransport @Inject constructor() : ReticulumTransport {
         )
     }
 
+    override suspend fun requestPath(destinationHashHex: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!initialised) return@withContext false
+            val destHash = hexToBytes(destinationHashHex)
+            if (Transport.hasPath(destHash)) {
+                true
+            } else {
+                Transport.requestPath(destHash)
+                false
+            }
+        }
+
     override suspend fun probeSideband(configDir: String): Boolean =
         withContext(Dispatchers.IO) {
             try {

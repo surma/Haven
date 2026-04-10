@@ -26,7 +26,7 @@ import sh.haven.core.local.DesktopManager
 import sh.haven.core.local.LocalSessionManager
 import sh.haven.core.local.ProotManager
 import sh.haven.core.mosh.MoshSessionManager
-import sh.haven.core.reticulum.ReticulumBridge
+import sh.haven.core.reticulum.ReticulumTransport
 import sh.haven.core.reticulum.ReticulumSessionManager
 import sh.haven.core.smb.SmbSessionManager
 import sh.haven.core.rdp.RdpSessionManager
@@ -118,7 +118,9 @@ class ConnectionsViewModelSessionTest {
             reticulumSessionManager = reticulumSessionManager,
             moshSessionManager = moshSessionManager,
             etSessionManager = etSessionManager,
-            reticulumBridge = mockk(relaxed = true),
+            reticulumTransport = mockk(relaxed = true) {
+                every { discoveredDestinations } returns kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+            },
             smbSessionManager = smbSessionManager,
             rcloneSessionManager = mockk(relaxed = true) {
                 every { sessions } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())

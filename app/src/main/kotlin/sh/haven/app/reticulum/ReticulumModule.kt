@@ -42,10 +42,9 @@ abstract class ReticulumModule {
             @Named("chaquopy") chaquopy: ReticulumTransport,
             @Named("native") native_: ReticulumTransport,
         ): ReticulumTransport {
-            // Default to Chaquopy during migration. Flip to native_ once
-            // end-to-end Reticulum sessions are verified on real devices.
-            // See GlassOnTin/Haven#79 for status.
-            return chaquopy
+            // Native Kotlin transport is the default (issue #79).
+            // Chaquopy bridge retained as fallback during migration window.
+            return native_
         }
     }
 }

@@ -67,6 +67,11 @@ class ChaquopyReticulumTransport @Inject constructor(
         ChaquopyShellSession(sessionId, bridge)
     }
 
+    override suspend fun requestPath(destinationHashHex: String): Boolean =
+        withContext(Dispatchers.IO) {
+            bridge.requestPath(destinationHashHex)
+        }
+
     override suspend fun probeSideband(configDir: String): Boolean =
         withContext(Dispatchers.IO) {
             bridge.probeSideband(configDir)

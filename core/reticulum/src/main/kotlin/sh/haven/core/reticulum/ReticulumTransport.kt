@@ -51,6 +51,12 @@ interface ReticulumTransport {
     /** Discovered rnsh destinations, sorted by hop count. */
     val discoveredDestinations: StateFlow<List<DiscoveredDestination>>
 
+    /**
+     * Request a path to a destination. Non-blocking — returns true if
+     * path is already known, false if a request was sent.
+     */
+    suspend fun requestPath(destinationHashHex: String): Boolean
+
     /** Probe for Sideband's shared instance. Safe to call repeatedly. */
     suspend fun probeSideband(configDir: String): Boolean
 

@@ -52,8 +52,9 @@ import sh.haven.core.fido.FidoTouchPrompt
 import sh.haven.core.local.LocalSessionManager
 import sh.haven.core.rclone.RcloneClient
 import sh.haven.core.rclone.RcloneSessionManager
-import sh.haven.core.reticulum.ReticulumBridge
+import sh.haven.core.reticulum.DiscoveredDestination
 import sh.haven.core.reticulum.ReticulumSessionManager
+import sh.haven.core.reticulum.ReticulumTransport
 import sh.haven.core.smb.SmbSessionManager
 import android.util.Log
 import com.jcraft.jsch.Proxy
@@ -84,7 +85,7 @@ class ConnectionsViewModel @Inject constructor(
     private val reticulumSessionManager: ReticulumSessionManager,
     private val moshSessionManager: MoshSessionManager,
     private val etSessionManager: EtSessionManager,
-    private val reticulumBridge: ReticulumBridge,
+    private val reticulumTransport: ReticulumTransport,
     private val smbSessionManager: SmbSessionManager,
     private val rcloneSessionManager: RcloneSessionManager,
     private val rcloneClient: RcloneClient,
@@ -457,8 +458,6 @@ class ConnectionsViewModel @Inject constructor(
         _newSessionProfileId.value = profileId
     }
 
-    data class DiscoveredDestination(val hash: String, val hops: Int)
-
     private val _discoveredDestinations = MutableStateFlow<List<DiscoveredDestination>>(emptyList())
     val discoveredDestinations: StateFlow<List<DiscoveredDestination>> = _discoveredDestinations.asStateFlow()
 
@@ -533,16 +532,16 @@ class ConnectionsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Speculatively connect to Sideband if RNS isn't initialised yet
-                if (!reticulumBridge.isInitialised()) {
+                if (!reticulumTransport.isInitialised) {
                     Log.d(TAG, "RNS not initialised, probing for Sideband...")
                     val configDir = File(appContext.filesDir, "reticulum")
                         .apply { mkdirs() }.absolutePath
-                    val probeResult = reticulumBridge.probeSideband(configDir)
-                    Log.d(TAG, "probeSideband result: $probeResult, isInitialised: ${reticulumBridge.isInitialised()}")
+                    val probeResult = reticulumTransport.probeSideband(configDir)
+                    Log.d(TAG, "probeSideband result: $probeResult, isInitialised: ${reticulumTransport.isInitialised}")
                 } else {
-                    Log.d(TAG, "RNS already initialised (mode=${reticulumBridge.getInitMode()})")
+                    Log.d(TAG, "RNS already initialised")
                 }
-                if (!reticulumBridge.isInitialised()) {
+                if (!reticulumTransport.isInitialised) {
                     Log.d(TAG, "RNS still not initialised after probe, skipping destination refresh")
                     return@launch
                 }
@@ -550,8 +549,8 @@ class ConnectionsViewModel @Inject constructor(
                 // Proactively request paths for saved Reticulum connections
                 requestPathsForSavedConnections()
 
-                val json = reticulumBridge.getDiscoveredDestinations()
-                val list = parseDiscoveredDestinations(json)
+                // Read discovered destinations from the transport's StateFlow
+                val list = reticulumTransport.discoveredDestinations.value
                 Log.d(TAG, "Discovered ${list.size} destinations: ${list.map { it.hash.take(8) }}")
                 _discoveredDestinations.value = list
             } catch (e: Exception) {
@@ -565,25 +564,12 @@ class ConnectionsViewModel @Inject constructor(
             val saved = connections.value.filter { it.isReticulum && !it.destinationHash.isNullOrBlank() }
             for (profile in saved) {
                 val hash = profile.destinationHash ?: continue
-                val alreadyKnown = reticulumBridge.requestPath(hash)
+                val alreadyKnown = reticulumTransport.requestPath(hash)
                 Log.d(TAG, "requestPath(${hash.take(8)}...): known=$alreadyKnown")
             }
         } catch (e: Exception) {
             Log.e(TAG, "requestPathsForSavedConnections failed", e)
         }
-    }
-
-    private fun parseDiscoveredDestinations(json: String): List<DiscoveredDestination> {
-        // Simple JSON array parsing without adding a dependency
-        val results = mutableListOf<DiscoveredDestination>()
-        val pattern = Regex(""""hash":\s*"([0-9a-f]+)".*?"hops":\s*(-?\d+)""")
-        for (match in pattern.findAll(json)) {
-            results.add(DiscoveredDestination(
-                hash = match.groupValues[1],
-                hops = match.groupValues[2].toIntOrNull() ?: -1,
-            ))
-        }
-        return results
     }
 
     fun saveConnection(profile: ConnectionProfile) {
