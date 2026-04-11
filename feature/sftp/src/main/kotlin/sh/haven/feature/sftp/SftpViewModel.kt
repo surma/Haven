@@ -507,6 +507,12 @@ class SftpViewModel @Inject constructor(
         return roots
     }
 
+    /** True when the local file browser needs MANAGE_EXTERNAL_STORAGE permission. */
+    val needsStoragePermission: Boolean
+        get() = _isLocalProfile.value &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R &&
+            !android.os.Environment.isExternalStorageManager()
+
     private fun listLocalDirectory(path: String) {
         viewModelScope.launch {
             try {

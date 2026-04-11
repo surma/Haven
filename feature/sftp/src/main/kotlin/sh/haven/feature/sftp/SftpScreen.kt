@@ -563,6 +563,33 @@ fun SftpScreen(
                     }
                 }
 
+                // Storage permission banner for local file browser
+                if (viewModel.needsStoragePermission) {
+                    Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.secondaryContainer) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val intent = android.content.Intent(
+                                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                        android.net.Uri.parse("package:${context.packageName}"),
+                                    )
+                                    context.startActivity(intent)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.Folder, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Storage access needed", style = MaterialTheme.typography.bodyMedium)
+                                Text("Tap to grant access to all files", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+                            }
+                        }
+                    }
+                }
+
                 // Clipboard banner
                 fileClipboard?.let { cb ->
                     Surface(tonalElevation = 2.dp) {
