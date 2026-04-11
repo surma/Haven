@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -136,6 +138,7 @@ fun SftpScreen(
     val dlnaRunning by viewModel.dlnaServerRunning.collectAsState()
 
     var showRenameDialog by remember { mutableStateOf<SftpEntry?>(null) }
+    var showConvertDialog by remember { mutableStateOf<SftpEntry?>(null) }
 
     LaunchedEffect(pendingSmbProfileId) {
         pendingSmbProfileId?.let { viewModel.setPendingSmbProfile(it) }
@@ -616,6 +619,9 @@ fun SftpScreen(
                                 },
                                 onCopy = { viewModel.copyToClipboard(listOf(entry), isCut = false) },
                                 onCut = { viewModel.copyToClipboard(listOf(entry), isCut = true) },
+                                onConvert = if (!entry.isDirectory && entry.isMediaFile(mediaExtensions) && viewModel.ffmpegAvailable) {
+                                    { showConvertDialog = entry }
+                                } else null,
                                 onPlay = if (isRclone && entry.isMediaFile(mediaExtensions)) {
                                     { viewModel.playMediaFile(entry) }
                                 } else null,
@@ -746,6 +752,49 @@ fun SftpScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = null }) { Text(stringResource(R.string.common_cancel)) }
+            },
+        )
+    }
+
+    // Convert format picker
+    showConvertDialog?.let { entry ->
+        var selectedFormat by remember { mutableStateOf("h264") }
+        val formats = listOf(
+            "h264" to "H.264 (MP4)",
+            "h265" to "H.265 (MP4)",
+            "vp9" to "VP9 (WebM)",
+            "mp3" to "MP3 (audio only)",
+        )
+        AlertDialog(
+            onDismissRequest = { showConvertDialog = null },
+            title = { Text(stringResource(R.string.sftp_convert_title)) },
+            text = {
+                Column {
+                    Text(entry.name, style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(12.dp))
+                    formats.forEach { (key, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedFormat = key }
+                                .padding(vertical = 4.dp),
+                        ) {
+                            RadioButton(selected = selectedFormat == key, onClick = { selectedFormat = key })
+                            Spacer(Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showConvertDialog = null
+                    viewModel.convertFile(entry, selectedFormat)
+                }) { Text(stringResource(R.string.sftp_convert)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConvertDialog = null }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }
@@ -1005,6 +1054,7 @@ private fun FileListItem(
     onCut: () -> Unit = {},
     onPlay: (() -> Unit)? = null,
     onSync: (() -> Unit)? = null,
+    onConvert: (() -> Unit)? = null,
     onRename: () -> Unit = {},
     onShareLink: (() -> Unit)? = null,
     onFolderSize: (() -> Unit)? = null,
@@ -1063,6 +1113,13 @@ private fun FileListItem(
                     text = { Text(stringResource(R.string.sftp_download)) },
                     leadingIcon = { Icon(Icons.Filled.Download, null) },
                     onClick = { showMenu = false; onDownload() },
+                )
+            }
+            if (onConvert != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.sftp_convert)) },
+                    leadingIcon = { Icon(Icons.Filled.Sync, null) },
+                    onClick = { showMenu = false; onConvert() },
                 )
             }
             DropdownMenuItem(

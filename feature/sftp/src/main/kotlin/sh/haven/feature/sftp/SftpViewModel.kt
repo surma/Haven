@@ -90,6 +90,7 @@ class SftpViewModel @Inject constructor(
     private val rcloneClient: RcloneClient,
     private val repository: ConnectionRepository,
     private val preferencesRepository: UserPreferencesRepository,
+    private val ffmpegExecutor: sh.haven.core.ffmpeg.FfmpegExecutor,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -129,6 +130,9 @@ class SftpViewModel @Inject constructor(
     private val _lastDownload = MutableStateFlow<DownloadResult?>(null)
     val lastDownload: StateFlow<DownloadResult?> = _lastDownload.asStateFlow()
     fun clearLastDownload() { _lastDownload.value = null }
+
+    /** Whether ffmpeg binaries are available for media conversion. */
+    val ffmpegAvailable: Boolean get() = ffmpegExecutor.isAvailable()
 
     /** Parsed set of media extensions from user preferences. */
     val mediaExtensionsSet: StateFlow<Set<String>> = preferencesRepository.mediaExtensions
@@ -517,6 +521,116 @@ class SftpViewModel @Inject constructor(
             } finally {
                 _loading.value = false
                 _transferProgress.value = null
+            }
+        }
+    }
+
+    /**
+     * Download a remote file to cache, transcode with FFmpeg, save to Downloads.
+     *
+     * @param entry The remote file to convert
+     * @param format Output format key: "h264", "h265", "vp9", "mp3"
+     */
+    fun convertFile(entry: SftpEntry, format: String) {
+        val profileId = _activeProfileId.value ?: return
+        viewModelScope.launch {
+            try {
+                _loading.value = true
+
+                // Phase 1: Download to cache
+                _transferProgress.value = TransferProgress("Downloading ${entry.name}", entry.size, 0)
+                val cacheInput = java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}")
+                withContext(Dispatchers.IO) {
+                    cacheInput.outputStream().use { out ->
+                        if (_isRcloneProfile.value) {
+                            val remote = activeRcloneRemote ?: throw IllegalStateException("Rclone not connected")
+                            rcloneClient.copyFile(remote, entry.path, cacheInput.parent!!, cacheInput.name)
+                        } else if (_isSmbProfile.value) {
+                            val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
+                            client.download(entry.path, out) { transferred, total ->
+                                _transferProgress.value = TransferProgress("Downloading ${entry.name}", total, transferred)
+                            }
+                        } else {
+                            val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
+                            channel.get(entry.path, out, object : SftpProgressMonitor {
+                                override fun init(op: Int, src: String, dest: String, max: Long) {
+                                    _transferProgress.value = TransferProgress("Downloading ${entry.name}", max, 0)
+                                }
+                                override fun count(bytes: Long): Boolean {
+                                    val prev = _transferProgress.value
+                                    if (prev != null) _transferProgress.value = prev.copy(transferredBytes = prev.transferredBytes + bytes)
+                                    return true
+                                }
+                                override fun end() {}
+                            })
+                        }
+                    }
+                }
+
+                // Phase 2: Transcode
+                val baseName = entry.name.substringBeforeLast('.')
+                val outExt = when (format) {
+                    "h265" -> "mp4"
+                    "vp9" -> "webm"
+                    "mp3" -> "mp3"
+                    else -> "mp4"
+                }
+                val outName = "${baseName}_converted.$outExt"
+                val cacheOutput = java.io.File(appContext.cacheDir, outName)
+
+                val cmd = when (format) {
+                    "h264" -> sh.haven.core.ffmpeg.TranscodeCommand.h264(cacheInput.absolutePath, cacheOutput.absolutePath)
+                    "h265" -> sh.haven.core.ffmpeg.TranscodeCommand.h265(cacheInput.absolutePath, cacheOutput.absolutePath)
+                    "vp9" -> sh.haven.core.ffmpeg.TranscodeCommand.vp9(cacheInput.absolutePath, cacheOutput.absolutePath)
+                    "mp3" -> sh.haven.core.ffmpeg.TranscodeCommand.mp3(cacheInput.absolutePath, cacheOutput.absolutePath)
+                    else -> sh.haven.core.ffmpeg.TranscodeCommand.h264(cacheInput.absolutePath, cacheOutput.absolutePath)
+                }
+
+                _transferProgress.value = TransferProgress("Converting to $format", 100, 0)
+                val result = withContext(Dispatchers.IO) {
+                    ffmpegExecutor.execute(cmd.build()) { stderrLine ->
+                        val progress = sh.haven.core.ffmpeg.FfmpegProgress.parse(stderrLine)
+                        if (progress != null) {
+                            // Use speed as a rough percentage hint (capped at 99%)
+                            val pct = (progress.timeSeconds * 10).toLong().coerceIn(0, 99)
+                            _transferProgress.value = TransferProgress("Converting to $format", 100, pct)
+                        }
+                    }
+                }
+
+                if (!result.success) {
+                    _error.value = "Conversion failed (exit ${result.exitCode})"
+                    return@launch
+                }
+
+                // Phase 3: Copy to Downloads via MediaStore
+                withContext(Dispatchers.IO) {
+                    val values = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Downloads.DISPLAY_NAME, outName)
+                        put(android.provider.MediaStore.Downloads.MIME_TYPE, when (outExt) {
+                            "mp4" -> "video/mp4"
+                            "webm" -> "video/webm"
+                            "mp3" -> "audio/mpeg"
+                            else -> "application/octet-stream"
+                        })
+                    }
+                    val uri = appContext.contentResolver.insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                    ) ?: throw IllegalStateException("Failed to create Downloads entry")
+                    appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                        cacheOutput.inputStream().use { it.copyTo(out) }
+                    }
+                }
+
+                _message.value = "Saved $outName to Downloads"
+            } catch (e: Exception) {
+                Log.e(TAG, "Convert failed", e)
+                _error.value = "Convert failed: ${e.message}"
+            } finally {
+                _loading.value = false
+                _transferProgress.value = null
+                // Clean up cache files
+                java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}").delete()
             }
         }
     }
