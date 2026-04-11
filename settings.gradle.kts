@@ -95,12 +95,10 @@ include(":core:rclone")
 include(":core:fido")
 include(":core:local")
 include(":core:wayland")
+include(":core:ffmpeg")
 
 include(":feature:settings")
 include(":feature:vnc")
 include(":feature:rdp")
 
 include(":integration-tests")
-
-// Phase 0 FFmpeg spike (throwaway — delete or transform into :core:ffmpeg after sign-off)
-include(":build-ffmpeg:spike")
