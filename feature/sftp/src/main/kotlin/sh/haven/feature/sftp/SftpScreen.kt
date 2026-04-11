@@ -706,6 +706,10 @@ fun SftpScreen(
                                 onConvert = if (!entry.isDirectory && entry.isMediaFile(mediaExtensions) && viewModel.ffmpegAvailable) {
                                     { showConvertDialog = entry }
                                 } else null,
+                                onStream = if (!entry.isDirectory && entry.isMediaFile(mediaExtensions)
+                                    && viewModel.ffmpegAvailable && viewModel.isLocalProfile()) {
+                                    { viewModel.streamFile(entry) }
+                                } else null,
                                 onPlay = if (isRclone && entry.isMediaFile(mediaExtensions)) {
                                     { viewModel.playMediaFile(entry) }
                                 } else null,
@@ -1201,6 +1205,7 @@ private fun FileListItem(
     onPlay: (() -> Unit)? = null,
     onSync: (() -> Unit)? = null,
     onConvert: (() -> Unit)? = null,
+    onStream: (() -> Unit)? = null,
     onRename: () -> Unit = {},
     onShareLink: (() -> Unit)? = null,
     onFolderSize: (() -> Unit)? = null,
@@ -1266,6 +1271,13 @@ private fun FileListItem(
                     text = { Text(stringResource(R.string.sftp_convert)) },
                     leadingIcon = { Icon(Icons.Filled.Sync, null) },
                     onClick = { showMenu = false; onConvert() },
+                )
+            }
+            if (onStream != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.sftp_stream)) },
+                    leadingIcon = { Icon(Icons.Filled.CastConnected, null) },
+                    onClick = { showMenu = false; onStream() },
                 )
             }
             DropdownMenuItem(

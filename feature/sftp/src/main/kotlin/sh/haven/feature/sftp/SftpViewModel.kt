@@ -93,6 +93,7 @@ class SftpViewModel @Inject constructor(
     private val repository: ConnectionRepository,
     private val preferencesRepository: UserPreferencesRepository,
     private val ffmpegExecutor: sh.haven.core.ffmpeg.FfmpegExecutor,
+    val hlsStreamServer: sh.haven.core.ffmpeg.HlsStreamServer,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -761,6 +762,39 @@ class SftpViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Start streaming a local file via HLS.
+     * Returns the URL to share with other devices.
+     */
+    fun streamFile(entry: SftpEntry) {
+        if (!_isLocalProfile.value) {
+            _error.value = "Streaming is only available for local files"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val port = hlsStreamServer.startFile(entry.path)
+                // Get the device's IP address for the shareable URL
+                val ip = withContext(Dispatchers.IO) {
+                    java.net.NetworkInterface.getNetworkInterfaces()?.toList()
+                        ?.flatMap { it.inetAddresses.toList() }
+                        ?.firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+                        ?.hostAddress ?: "localhost"
+                }
+                val url = "http://$ip:$port/"
+                _message.value = "Streaming on $url"
+            } catch (e: Exception) {
+                Log.e(TAG, "Stream failed", e)
+                _error.value = "Stream failed: ${e.message}"
+            }
+        }
+    }
+
+    fun stopStream() {
+        hlsStreamServer.stop()
+        _message.value = "Stream stopped"
     }
 
     fun uploadFile(fileName: String, sourceUri: Uri) {
