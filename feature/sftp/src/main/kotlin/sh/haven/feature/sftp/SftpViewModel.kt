@@ -447,7 +447,13 @@ class SftpViewModel @Inject constructor(
         val current = _currentPath.value
         if (current == "/") return
         val parent = current.trimEnd('/').substringBeforeLast('/', "/")
-        navigateTo(if (parent.isEmpty()) "/" else parent)
+        val target = if (parent.isEmpty()) "/" else parent
+        // For local files, skip unreadable parent directories and jump to root
+        if (_isLocalProfile.value && target != "/" && !java.io.File(target).canRead()) {
+            navigateTo("/")
+        } else {
+            navigateTo(target)
+        }
     }
 
     fun setSortMode(mode: SortMode) {
@@ -487,52 +493,36 @@ class SftpViewModel @Inject constructor(
      * Uses "/" as the root showing common Android storage locations,
      * then standard java.io.File listing within directories.
      */
+    private fun listLocalRoots(): List<SftpEntry> {
+        val roots = mutableListOf<SftpEntry>()
+        val storage = android.os.Environment.getExternalStorageDirectory()
+        if (storage.canRead()) {
+            roots.add(SftpEntry("Internal Storage", storage.absolutePath, true, 0, storage.lastModified() / 1000, ""))
+        }
+        val downloads = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        if (downloads.canRead()) {
+            roots.add(SftpEntry("Downloads", downloads.absolutePath, true, 0, downloads.lastModified() / 1000, ""))
+        }
+        roots.add(SftpEntry("App Cache", appContext.cacheDir.absolutePath, true, 0, appContext.cacheDir.lastModified() / 1000, ""))
+        return roots
+    }
+
     private fun listLocalDirectory(path: String) {
         viewModelScope.launch {
             try {
                 _loading.value = true
                 val entries = withContext(Dispatchers.IO) {
                     val dir = if (path == "/") {
-                        // Show common accessible directories as the root
-                        val roots = mutableListOf<SftpEntry>()
-                        val storage = android.os.Environment.getExternalStorageDirectory()
-                        if (storage.canRead()) {
-                            roots.add(SftpEntry(
-                                name = "Internal Storage",
-                                path = storage.absolutePath,
-                                isDirectory = true,
-                                size = 0,
-                                modifiedTime = storage.lastModified() / 1000,
-                                permissions = "",
-                            ))
-                        }
-                        // Downloads
-                        val downloads = android.os.Environment.getExternalStoragePublicDirectory(
-                            android.os.Environment.DIRECTORY_DOWNLOADS
-                        )
-                        if (downloads.canRead()) {
-                            roots.add(SftpEntry(
-                                name = "Downloads",
-                                path = downloads.absolutePath,
-                                isDirectory = true,
-                                size = 0,
-                                modifiedTime = downloads.lastModified() / 1000,
-                                permissions = "",
-                            ))
-                        }
-                        // App cache (always accessible)
-                        roots.add(SftpEntry(
-                            name = "App Cache",
-                            path = appContext.cacheDir.absolutePath,
-                            isDirectory = true,
-                            size = 0,
-                            modifiedTime = appContext.cacheDir.lastModified() / 1000,
-                            permissions = "",
-                        ))
-                        return@withContext roots
+                        return@withContext listLocalRoots()
                     } else {
                         val file = java.io.File(path)
-                        file.listFiles()?.map { f ->
+                        val files = file.listFiles()
+                        if (files == null) {
+                            // Can't read this directory — jump back to root
+                            _currentPath.value = "/"
+                            return@withContext listLocalRoots()
+                        }
+                        files.map { f ->
                             SftpEntry(
                                 name = f.name,
                                 path = f.absolutePath,
@@ -545,7 +535,7 @@ class SftpViewModel @Inject constructor(
                                     if (f.canExecute()) append('x') else append('-')
                                 },
                             )
-                        } ?: emptyList()
+                        }
                     }
                     dir
                 }
