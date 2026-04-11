@@ -545,23 +545,27 @@ class SftpViewModel @Inject constructor(
                 _loading.value = true
 
                 // Phase 1: Download to cache
-                _transferProgress.value = TransferProgress("Downloading ${entry.name}", entry.size, 0)
+                val dlLabel = "\u2B07 Downloading ${entry.name}"
+                _transferProgress.value = TransferProgress(dlLabel, entry.size, 0)
                 val cacheInput = java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}")
                 withContext(Dispatchers.IO) {
                     cacheInput.outputStream().use { out ->
                         if (_isRcloneProfile.value) {
                             val remote = activeRcloneRemote ?: throw IllegalStateException("Rclone not connected")
+                            // rclone has no streaming progress — show indeterminate
+                            _transferProgress.value = TransferProgress(dlLabel, 0, 0)
                             rcloneClient.copyFile(remote, entry.path, cacheInput.parent!!, cacheInput.name)
+                            _transferProgress.value = TransferProgress(dlLabel, entry.size, entry.size)
                         } else if (_isSmbProfile.value) {
                             val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
                             client.download(entry.path, out) { transferred, total ->
-                                _transferProgress.value = TransferProgress("Downloading ${entry.name}", total, transferred)
+                                _transferProgress.value = TransferProgress(dlLabel, total, transferred)
                             }
                         } else {
                             val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
                             channel.get(entry.path, out, object : SftpProgressMonitor {
                                 override fun init(op: Int, src: String, dest: String, max: Long) {
-                                    _transferProgress.value = TransferProgress("Downloading ${entry.name}", max, 0)
+                                    _transferProgress.value = TransferProgress(dlLabel, max, 0)
                                 }
                                 override fun count(bytes: Long): Boolean {
                                     val prev = _transferProgress.value
@@ -593,13 +597,14 @@ class SftpViewModel @Inject constructor(
                     else -> sh.haven.core.ffmpeg.TranscodeCommand.h264(cacheInput.absolutePath, cacheOutput.absolutePath)
                 }.videoFilters(videoFilters).audioFilters(audioFilters)
 
-                _transferProgress.value = TransferProgress("Converting to $format", 100, 0, isPercentage = true)
+                val convertLabel = "\u2699 Converting to $format"
+                _transferProgress.value = TransferProgress(convertLabel, 100, 0, isPercentage = true)
                 val result = withContext(Dispatchers.IO) {
                     ffmpegExecutor.execute(cmd.build()) { stderrLine ->
                         val progress = sh.haven.core.ffmpeg.FfmpegProgress.parse(stderrLine)
                         if (progress != null) {
                             val pct = (progress.timeSeconds * 10).toLong().coerceIn(0, 99)
-                            _transferProgress.value = TransferProgress("Converting to $format", 100, pct, isPercentage = true)
+                            _transferProgress.value = TransferProgress(convertLabel, 100, pct, isPercentage = true)
                         }
                     }
                 }
