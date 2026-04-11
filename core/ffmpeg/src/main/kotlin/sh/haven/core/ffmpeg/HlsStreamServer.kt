@@ -82,8 +82,9 @@ class HlsStreamServer @Inject constructor(
                 add("-tune"); add("zerolatency")
                 add("-c:a"); add("aac"); add("-b:a"); add("128k")
             } else {
-                // Audio-only: drop any attached pictures
-                add("-vn")
+                // Audio-only: map only audio stream to avoid decoding
+                // attached pictures (album art) that lack a decoder
+                add("-map"); add("0:a")
                 add("-c:a"); add("aac"); add("-b:a"); add("128k")
             }
             add("-f"); add("hls")
