@@ -64,13 +64,15 @@ class HlsStreamServer @Inject constructor(
         val probeResult = ffmpegExecutor.probe(listOf(
             "-v", "error",
             "-select_streams", "v",
-            "-show_entries", "stream=codec_type,disposition",
-            "-of", "csv=p=0", inputPath,
+            "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
+            "-of", "flat", inputPath,
         ))
-        val hasRealVideo = probeResult.stdout.lines().any {
-            it.contains("video") && !it.contains("attached")
-        }
-        Log.w(TAG, "Probe: hasRealVideo=$hasRealVideo stdout=${probeResult.stdout.take(200)}")
+        // flat format: streams.stream.0.disposition.attached_pic=1 for album art
+        val probeOut = probeResult.stdout
+        val hasVideoStream = probeOut.contains("codec_type=\"video\"")
+        val isAttachedPic = probeOut.contains("attached_pic=1")
+        val hasRealVideo = hasVideoStream && !isAttachedPic
+        Log.w(TAG, "Probe: hasRealVideo=$hasRealVideo (video=$hasVideoStream attached=$isAttachedPic) stdout=${probeOut.take(300)}")
 
         // Start ffmpeg: transcode to HLS segments
         val args = buildList {

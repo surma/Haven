@@ -31,7 +31,7 @@ SCRIPT_DIR="$PWD"
 
 ABI="${ABI:-arm64-v8a}"
 API="${API:-26}"
-FFMPEG_REF="${FFMPEG_REF:-n7.1.1}"
+FFMPEG_REF="${FFMPEG_REF:-n8.0}"
 
 echo "=== FFmpeg Phase 0 spike build ==="
 echo "ABI:        $ABI"
