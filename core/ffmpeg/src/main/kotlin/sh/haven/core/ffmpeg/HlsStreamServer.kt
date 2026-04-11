@@ -59,19 +59,32 @@ class HlsStreamServer @Inject constructor(
 
         val playlistPath = File(dir, "stream.m3u8").absolutePath
 
+        // Probe input to determine if it has video
+        val probeResult = ffmpegExecutor.probe(listOf(
+            "-v", "error", "-show_entries", "stream=codec_type",
+            "-of", "csv=p=0", inputPath,
+        ))
+        val hasVideo = "video" in probeResult.stdout
+
         // Start ffmpeg: transcode to HLS segments
-        val args = listOf(
-            "-y",
-            "-i", inputPath,
-            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
-            "-c:a", "aac", "-b:a", "128k",
-            "-f", "hls",
-            "-hls_time", "2",
-            "-hls_list_size", "10",
-            "-hls_flags", "delete_segments+append_list",
-            "-hls_segment_filename", File(dir, "seg%03d.ts").absolutePath,
-            playlistPath,
-        )
+        val args = buildList {
+            add("-y")
+            add("-i"); add(inputPath)
+            if (hasVideo) {
+                add("-c:v"); add("libx264")
+                add("-preset"); add("ultrafast")
+                add("-tune"); add("zerolatency")
+            } else {
+                add("-vn")
+            }
+            add("-c:a"); add("aac"); add("-b:a"); add("128k")
+            add("-f"); add("hls")
+            add("-hls_time"); add("2")
+            add("-hls_list_size"); add("10")
+            add("-hls_flags"); add("delete_segments+append_list")
+            add("-hls_segment_filename"); add(File(dir, "seg%03d.ts").absolutePath)
+            add(playlistPath)
+        }
 
         Log.w(TAG, "Starting ffmpeg HLS: ${args.joinToString(" ")}")
         ffmpegJob = ffmpegExecutor.startJob(args) { line ->
