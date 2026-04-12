@@ -2,10 +2,9 @@ package sh.haven.core.data.db
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import sh.haven.core.data.db.entities.ConnectionProfile
 
@@ -21,7 +20,7 @@ interface ConnectionDao {
     @Query("SELECT * FROM connection_profiles WHERE id = :id")
     suspend fun getById(id: String): ConnectionProfile?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(profile: ConnectionProfile)
 
     @Update
