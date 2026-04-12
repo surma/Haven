@@ -51,6 +51,15 @@ data class SftpEntry(
     val mimeType: String = "",
 )
 
+/**
+ * Where the output of a media conversion should be saved.
+ *
+ * - [DOWNLOADS]: local device Downloads folder (MediaStore-backed on API 29+).
+ * - [SOURCE_FOLDER]: same directory as the source file. For remote profiles
+ *   (rclone/SFTP/SMB) this uploads the converted file back to the remote.
+ */
+enum class ConvertDestination { DOWNLOADS, SOURCE_FOLDER }
+
 enum class BackendType { SFTP, SMB, RCLONE, LOCAL }
 
 /** Clipboard for cross-filesystem copy/move. */
@@ -685,10 +694,16 @@ class SftpViewModel @Inject constructor(
     }
 
     /**
-     * Download a remote file to cache, transcode with FFmpeg, save to Downloads.
+     * Transcode a media file with FFmpeg and save the result to Downloads.
      *
-     * @param entry The remote file to convert
-     * @param format Output format key: "h264", "h265", "vp9", "mp3"
+     * For **rclone** profiles the default behaviour is to stream the file
+     * over HTTP via the rclone media server (fast start, no temp file).
+     * Pass [downloadFirst] = true to force the legacy download-then-process
+     * path — useful for offline conversion or when you want the bytes cached
+     * locally for subsequent conversions.
+     *
+     * For **SFTP/SMB** the file is always downloaded to cache first (no HTTP
+     * serve equivalent). For **local** files the on-disk path is used directly.
      */
     fun convertFile(
         entry: SftpEntry,
@@ -697,21 +712,37 @@ class SftpViewModel @Inject constructor(
         audioEncoder: String = "aac",
         videoFilters: List<sh.haven.core.ffmpeg.VideoFilter> = emptyList(),
         audioFilters: List<sh.haven.core.ffmpeg.AudioFilter> = emptyList(),
+        downloadFirst: Boolean = false,
+        destination: ConvertDestination = ConvertDestination.DOWNLOADS,
     ) {
         val profileId = _activeProfileId.value ?: return
         viewModelScope.launch {
             try {
                 _loading.value = true
 
-                // Phase 1: Get input file (local = direct path, remote = download to cache)
-                val cacheInput: java.io.File
+                // Phase 1: Resolve the ffmpeg input — either a local path or an
+                // http:// URL. Only SFTP/SMB and user-forced rclone downloads
+                // produce a temp cache file here.
+                val ffmpegInput: String
                 if (_isLocalProfile.value) {
-                    // Local file — no download needed
-                    cacheInput = java.io.File(entry.path)
+                    ffmpegInput = entry.path
+                } else if (_isRcloneProfile.value && !downloadFirst) {
+                    // Stream via the rclone HTTP media server — no bulk download.
+                    // ffmpeg reads via Range requests, rclone's VFS disk cache
+                    // handles the chunking.
+                    val port = ensureMediaServer()
+                    val encodedPath = entry.path
+                        .trimStart('/')
+                        .split('/')
+                        .joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+                    ffmpegInput = "http://127.0.0.1:$port/$encodedPath"
+                    Log.d(TAG, "convertFile: streaming rclone via $ffmpegInput")
                 } else {
+                    // SFTP, SMB, or rclone with downloadFirst=true — pull the
+                    // whole file into cache, then hand the path to ffmpeg.
                     val dlLabel = "\u2B07 Downloading ${entry.name}"
                     _transferProgress.value = TransferProgress(dlLabel, entry.size, 0)
-                    cacheInput = java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}")
+                    val cacheInput = java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}")
                     withContext(Dispatchers.IO) {
                         cacheInput.outputStream().use { out ->
                             if (_isRcloneProfile.value) {
@@ -740,6 +771,7 @@ class SftpViewModel @Inject constructor(
                             }
                         }
                     }
+                    ffmpegInput = cacheInput.absolutePath
                 }
 
                 // Phase 2: Transcode
@@ -751,7 +783,7 @@ class SftpViewModel @Inject constructor(
                 val outName = "${baseName}_converted.$outExt"
                 val cacheOutput = java.io.File(appContext.cacheDir, outName)
 
-                val cmd = sh.haven.core.ffmpeg.TranscodeCommand(cacheInput.absolutePath, cacheOutput.absolutePath)
+                val cmd = sh.haven.core.ffmpeg.TranscodeCommand(ffmpegInput, cacheOutput.absolutePath)
                 if (videoEncoder != null) {
                     cmd.videoCodec(videoEncoder)
                     // Sensible defaults for common encoders
@@ -767,12 +799,13 @@ class SftpViewModel @Inject constructor(
                     .videoFilters(videoFilters)
                     .audioFilters(audioFilters)
 
-                // Probe input duration for accurate progress
+                // Probe input duration for accurate progress (uses HTTP Range
+                // requests when input is a URL — typically only reads ~200KB)
                 val durationSec = withContext(Dispatchers.IO) {
                     val probeResult = ffmpegExecutor.probe(listOf(
                         "-v", "error", "-show_entries", "format=duration",
                         "-of", "default=noprint_wrappers=1:nokey=1",
-                        cacheInput.absolutePath,
+                        ffmpegInput,
                     ))
                     probeResult.stdout.trim().toDoubleOrNull() ?: 0.0
                 }
@@ -798,44 +831,119 @@ class SftpViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Phase 3: Copy to Downloads via MediaStore (API 29+) or direct file (older)
-                withContext(Dispatchers.IO) {
-                    val mimeType = when (outExt) {
-                        "mp4", "m4a" -> if (videoEncoder != null) "video/mp4" else "audio/mp4"
-                        "mkv" -> "video/x-matroska"
-                        "webm" -> "video/webm"
-                        "mov" -> "video/quicktime"
-                        "avi" -> "video/x-msvideo"
-                        "ts" -> "video/mp2t"
-                        "mp3" -> "audio/mpeg"
-                        "wav" -> "audio/wav"
-                        "ogg" -> "audio/ogg"
-                        "opus" -> "audio/opus"
-                        "flac" -> "audio/flac"
-                        else -> "application/octet-stream"
+                // Phase 3: Save the output to the user's chosen destination.
+                val mimeType = when (outExt) {
+                    "mp4", "m4a" -> if (videoEncoder != null) "video/mp4" else "audio/mp4"
+                    "mkv" -> "video/x-matroska"
+                    "webm" -> "video/webm"
+                    "mov" -> "video/quicktime"
+                    "avi" -> "video/x-msvideo"
+                    "ts" -> "video/mp2t"
+                    "mp3" -> "audio/mpeg"
+                    "wav" -> "audio/wav"
+                    "ogg" -> "audio/ogg"
+                    "opus" -> "audio/opus"
+                    "flac" -> "audio/flac"
+                    else -> "application/octet-stream"
+                }
+                val savedLocation: String = when (destination) {
+                    ConvertDestination.DOWNLOADS -> {
+                        withContext(Dispatchers.IO) {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                val values = android.content.ContentValues().apply {
+                                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, outName)
+                                    put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType)
+                                }
+                                val uri = appContext.contentResolver.insert(
+                                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                                ) ?: throw IllegalStateException("Failed to create Downloads entry")
+                                appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                                    cacheOutput.inputStream().use { it.copyTo(out) }
+                                }
+                            } else {
+                                @Suppress("DEPRECATION")
+                                val dlDir = android.os.Environment.getExternalStoragePublicDirectory(
+                                    android.os.Environment.DIRECTORY_DOWNLOADS
+                                )
+                                val dest = java.io.File(dlDir, outName)
+                                cacheOutput.copyTo(dest, overwrite = true)
+                            }
+                        }
+                        "Downloads"
                     }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        val values = android.content.ContentValues().apply {
-                            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, outName)
-                            put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType)
+                    ConvertDestination.SOURCE_FOLDER -> {
+                        // The directory of the source file, expressed in that backend's native path
+                        val sourceDir = entry.path.substringBeforeLast('/', "").ifEmpty { "/" }
+                        val destPath = if (sourceDir == "/") "/$outName" else "$sourceDir/$outName"
+                        when {
+                            _isLocalProfile.value -> {
+                                withContext(Dispatchers.IO) {
+                                    cacheOutput.copyTo(java.io.File(destPath), overwrite = true)
+                                }
+                                sourceDir
+                            }
+                            _isRcloneProfile.value -> {
+                                val remote = activeRcloneRemote
+                                    ?: throw IllegalStateException("Rclone not connected")
+                                val uploadLabel = "\u2B06 Uploading $outName"
+                                _transferProgress.value = TransferProgress(uploadLabel, 0, 0)
+                                withContext(Dispatchers.IO) {
+                                    // rclone copyFile: local-abs-dir + filename -> remote + path
+                                    rcloneClient.copyFile(
+                                        cacheOutput.parent!!, cacheOutput.name,
+                                        remote, destPath.trimStart('/'),
+                                    )
+                                }
+                                "$remote:$sourceDir"
+                            }
+                            _isSmbProfile.value -> {
+                                val client = activeSmbClient
+                                    ?: throw IllegalStateException("SMB not connected")
+                                val uploadLabel = "\u2B06 Uploading $outName"
+                                _transferProgress.value = TransferProgress(uploadLabel, cacheOutput.length(), 0)
+                                withContext(Dispatchers.IO) {
+                                    cacheOutput.inputStream().use { input ->
+                                        client.upload(input, destPath, cacheOutput.length()) { transferred, total ->
+                                            _transferProgress.value = TransferProgress(uploadLabel, total, transferred)
+                                        }
+                                    }
+                                }
+                                sourceDir
+                            }
+                            else -> {
+                                // SFTP
+                                val channel = getOrOpenChannel(profileId)
+                                    ?: throw IllegalStateException("Not connected")
+                                val uploadLabel = "\u2B06 Uploading $outName"
+                                _transferProgress.value = TransferProgress(uploadLabel, cacheOutput.length(), 0)
+                                withContext(Dispatchers.IO) {
+                                    cacheOutput.inputStream().use { input ->
+                                        var transferred = 0L
+                                        val total = cacheOutput.length()
+                                        val monitor = object : SftpProgressMonitor {
+                                            override fun init(op: Int, src: String, dest: String, max: Long) {}
+                                            override fun count(bytes: Long): Boolean {
+                                                transferred += bytes
+                                                _transferProgress.value = TransferProgress(uploadLabel, total, transferred)
+                                                return true
+                                            }
+                                            override fun end() {}
+                                        }
+                                        channel.put(input, destPath, monitor)
+                                    }
+                                }
+                                sourceDir
+                            }
                         }
-                        val uri = appContext.contentResolver.insert(
-                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
-                        ) ?: throw IllegalStateException("Failed to create Downloads entry")
-                        appContext.contentResolver.openOutputStream(uri)?.use { out ->
-                            cacheOutput.inputStream().use { it.copyTo(out) }
-                        }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        val dlDir = android.os.Environment.getExternalStoragePublicDirectory(
-                            android.os.Environment.DIRECTORY_DOWNLOADS
-                        )
-                        val dest = java.io.File(dlDir, outName)
-                        cacheOutput.copyTo(dest, overwrite = true)
                     }
                 }
 
-                _message.value = "Saved $outName to Downloads"
+                _message.value = "Saved $outName to $savedLocation"
+                // If we saved into the folder currently showing, refresh so the user sees it
+                if (destination == ConvertDestination.SOURCE_FOLDER) {
+                    val sourceDir = entry.path.substringBeforeLast('/', "").ifEmpty { "/" }
+                    if (_currentPath.value == sourceDir) refresh()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Convert failed", e)
                 _error.value = "Convert failed: ${e.message}"
@@ -851,31 +959,61 @@ class SftpViewModel @Inject constructor(
     }
 
     /**
-     * Start streaming a local file via HLS.
-     * Returns the URL to share with other devices.
+     * Start an HLS stream for the given file and open it in a browser.
+     *
+     * - **Local** files: ffmpeg reads the path directly.
+     * - **Rclone** files: ffmpeg reads via the rclone HTTP media server
+     *   (Range requests, VFS disk cache) — no bulk download.
+     * - **SFTP/SMB**: not supported (no HTTP serve equivalent). Would
+     *   require either downloading to cache first or piping via ssh/smb
+     *   into ffmpeg's stdin.
      */
     fun streamFile(entry: SftpEntry) {
-        Log.w(TAG, "streamFile: ${entry.path} isLocal=${_isLocalProfile.value} ffmpegAvail=${ffmpegExecutor.isAvailable()}")
-        if (!_isLocalProfile.value) {
-            _error.value = "Streaming is only available for local files"
+        Log.w(TAG, "streamFile: ${entry.path} isLocal=${_isLocalProfile.value} isRclone=${_isRcloneProfile.value} ffmpegAvail=${ffmpegExecutor.isAvailable()}")
+        if (!_isLocalProfile.value && !_isRcloneProfile.value) {
+            _error.value = "Streaming is only available for local and cloud files"
             return
         }
         viewModelScope.launch {
             try {
-                Log.w(TAG, "Starting HLS stream for ${entry.path}")
-                val port = hlsStreamServer.startFile(entry.path)
-                // Get the device's IP address for the shareable URL
+                // Resolve the ffmpeg input path or URL
+                val streamInput: String = if (_isLocalProfile.value) {
+                    entry.path
+                } else {
+                    val port = ensureMediaServer()
+                    val encodedPath = entry.path
+                        .trimStart('/')
+                        .split('/')
+                        .joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+                    "http://127.0.0.1:$port/$encodedPath"
+                }
+                Log.w(TAG, "Starting HLS stream for $streamInput")
+                val port = hlsStreamServer.startFile(streamInput)
+                // Get the device's LAN IP so the URL is shareable with other
+                // devices on the same network. Falls back to 127.0.0.1 if we
+                // can't detect a usable interface (e.g. no WiFi/cellular).
                 val ip = withContext(Dispatchers.IO) {
                     java.net.NetworkInterface.getNetworkInterfaces()?.toList()
+                        ?.filter { it.isUp && !it.isLoopback }
                         ?.flatMap { it.inetAddresses.toList() }
                         ?.firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
-                        ?.hostAddress ?: "localhost"
+                        ?.hostAddress ?: "127.0.0.1"
                 }
                 val url = "http://$ip:$port/"
-                _message.value = "Streaming on $url"
-                // Open in browser
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("http://localhost:$port/"))
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Copy to the system clipboard so the user can paste it into
+                // another device easily
+                val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE)
+                    as? android.content.ClipboardManager
+                clipboard?.setPrimaryClip(
+                    android.content.ClipData.newPlainText("Haven stream URL", url)
+                )
+                _message.value = "Streaming on $url (copied to clipboard)"
+                // Open the shareable URL in the browser — the address bar will
+                // show it, so the user can copy/share from there too.
+                val intent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(url),
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 appContext.startActivity(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Stream failed", e)
@@ -2064,23 +2202,33 @@ class SftpViewModel @Inject constructor(
         return port
     }
 
-    /** Play a single media file via HTTP streaming. */
+    /** Play a single media file via HTTP streaming through the rclone media server. */
     fun playMediaFile(entry: SftpEntry) {
+        Log.d(TAG, "playMediaFile: ${entry.path}")
         viewModelScope.launch {
             try {
                 val port = ensureMediaServer()
-                val url = "http://127.0.0.1:$port/${entry.path}"
+                // URL-encode each path segment so spaces / parentheses / unicode
+                // don't break the intent URI. Without this, VLC (and Android's
+                // intent parser) silently fail on file names with special chars.
+                val encodedPath = entry.path
+                    .trimStart('/')
+                    .split('/')
+                    .joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+                val url = "http://127.0.0.1:$port/$encodedPath"
                 val mimeType = entry.mimeType.ifEmpty {
                     android.webkit.MimeTypeMap.getSingleton()
                         .getMimeTypeFromExtension(entry.name.substringAfterLast('.', "").lowercase())
                         ?: "video/*"
                 }
+                Log.d(TAG, "playMediaFile: launching $url ($mimeType)")
                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                     setDataAndType(android.net.Uri.parse(url), mimeType)
                     addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 appContext.startActivity(intent)
             } catch (e: android.content.ActivityNotFoundException) {
+                Log.w(TAG, "playMediaFile: no activity to handle", e)
                 _error.value = "No media player app installed"
             } catch (e: Exception) {
                 Log.e(TAG, "Play media failed", e)

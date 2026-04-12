@@ -680,6 +680,10 @@ fun SftpScreen(
                                 onTap = {
                                     if (entry.isDirectory) {
                                         viewModel.navigateTo(entry.path)
+                                    } else if (isRclone && entry.isMediaFile(mediaExtensions)) {
+                                        // Rclone media file: play via the rclone HTTP
+                                        // media server (no full download needed).
+                                        viewModel.playMediaFile(entry)
                                     } else if (viewModel.isLocalProfile()) {
                                         // Open local file with system app
                                         try {
@@ -721,7 +725,8 @@ fun SftpScreen(
                                 onConvert = if (!entry.isDirectory && entry.isMediaFile(mediaExtensions)) {
                                     { viewModel.openConvertDialog(entry) }
                                 } else null,
-                                onStream = if (!entry.isDirectory && viewModel.isLocalProfile()) {
+                                onStream = if (!entry.isDirectory && entry.isMediaFile(mediaExtensions) &&
+                                    (viewModel.isLocalProfile() || isRclone)) {
                                     { viewModel.streamFile(entry) }
                                 } else null,
                                 onPlay = if (isRclone && entry.isMediaFile(mediaExtensions)) {
@@ -881,24 +886,51 @@ fun SftpScreen(
             "flac" to "FLAC", "copy" to "Copy (no re-encode)",
         )
 
-        var selectedContainer by rememberSaveable { mutableStateOf(if (isAudioOnlyInput) "mp3" else "mp4") }
-        var selectedVideoEnc by rememberSaveable { mutableStateOf("libx264") }
-        var selectedAudioEnc by rememberSaveable { mutableStateOf("aac") }
+        // Default container matches the source extension where possible so
+        // that copy+copy remux works out of the box without changing anything.
+        val sourceExt = entry.name.substringAfterLast('.', "").lowercase()
+        val defaultContainer = when (sourceExt) {
+            // Video containers we expose
+            "mp4", "mkv", "webm", "mov", "avi" -> sourceExt
+            "m4v" -> "mp4"
+            "ts", "mpg", "mpeg" -> "mpegts"
+            // Audio containers we expose
+            "mp3", "wav", "ogg", "opus", "flac", "m4a" -> sourceExt
+            "aac" -> "m4a"
+            else -> if (isAudioOnlyInput) "mp3" else "mp4"
+        }
+        var selectedContainer by rememberSaveable { mutableStateOf(defaultContainer) }
+        // Default both encoders to "copy" (stream remux) — fastest, lossless,
+        // works instantly when the source codecs fit the chosen container.
+        // User can switch to a real encoder if they need to transcode.
+        var selectedVideoEnc by rememberSaveable { mutableStateOf("copy") }
+        var selectedAudioEnc by rememberSaveable { mutableStateOf("copy") }
         val filterState = rememberSaveable(saver = FilterState.Saver) { FilterState() }
         val isAudioOnly = isAudioOnlyInput
         var previewSeek by rememberSaveable { mutableFloatStateOf(0f) }
         var previewStale by rememberSaveable { mutableStateOf(false) }
+        // For rclone profiles: default to streaming over HTTP (fast); user
+        // can force a full download for offline conversion or reliability.
+        var downloadFirst by rememberSaveable { mutableStateOf(false) }
+        // Where to save the transcoded file — Downloads (local) or alongside
+        // the source (which uploads back to cloud/SFTP/SMB for remote profiles).
+        var destinationKey by rememberSaveable { mutableStateOf("downloads") }
 
         // Prepare preview (probe duration, cache remote file) on dialog open
         LaunchedEffect(entry) {
             viewModel.preparePreview(entry)
         }
 
-        // Switch defaults when probe reveals audio-only input
+        // If the probe reveals the input is audio-only AND the current container
+        // is a video-only container, switch to a sensible audio container
+        // matching the source extension (keeping the copy+copy default intact).
         LaunchedEffect(isAudioOnlyInput) {
-            if (isAudioOnlyInput) {
-                selectedContainer = "mp3"
-                selectedAudioEnc = "libmp3lame"
+            if (isAudioOnlyInput && selectedContainer in listOf("mp4", "mkv", "webm", "mov", "avi", "mpegts")) {
+                selectedContainer = when (sourceExt) {
+                    "mp3", "wav", "ogg", "opus", "flac", "m4a" -> sourceExt
+                    "aac" -> "m4a"
+                    else -> "mp3"
+                }
             }
         }
 
@@ -1059,7 +1091,71 @@ fun SftpScreen(
                         selected = selectedAudioEnc,
                         onSelect = { selectedAudioEnc = it },
                     )
+                    Spacer(Modifier.height(12.dp))
+
+                    // Output destination selector
+                    Text("Save to", style = MaterialTheme.typography.labelMedium)
+                    val sourceFolderLabel = when {
+                        viewModel.isLocalProfile() -> "Same folder as source"
+                        isRclone -> "Back to cloud (same folder)"
+                        else -> "Back to server (same folder)"
+                    }
+                    val destinationOptions = listOf(
+                        "downloads" to "Downloads (this device)",
+                        "source" to sourceFolderLabel,
+                    )
+                    destinationOptions.forEach { (key, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { destinationKey = key }
+                                .padding(vertical = 2.dp),
+                        ) {
+                            RadioButton(
+                                selected = destinationKey == key,
+                                onClick = { destinationKey = key },
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
+
+                    // "Download first" toggle — rclone only. By default Haven
+                    // streams the file directly into ffmpeg via HTTP (fast);
+                    // enabling this forces a full download before transcode,
+                    // useful for offline conversion or flaky connections.
+                    if (isRclone) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { downloadFirst = !downloadFirst }
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Download first",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    if (downloadFirst) {
+                                        "Downloads the whole file before transcoding"
+                                    } else {
+                                        "Streams from cloud (faster for large files)"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            androidx.compose.material3.Switch(
+                                checked = downloadFirst,
+                                onCheckedChange = { downloadFirst = it },
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
 
                     // Filter section (collapsible)
                     FilterSection(
@@ -1178,6 +1274,12 @@ fun SftpScreen(
                         audioEncoder = selectedAudioEnc,
                         videoFilters = filterState.buildVideoFilters(),
                         audioFilters = filterState.buildAudioFilters(),
+                        downloadFirst = downloadFirst,
+                        destination = if (destinationKey == "source") {
+                            ConvertDestination.SOURCE_FOLDER
+                        } else {
+                            ConvertDestination.DOWNLOADS
+                        },
                     )
                 }) { Text(stringResource(R.string.sftp_convert)) }
             },
