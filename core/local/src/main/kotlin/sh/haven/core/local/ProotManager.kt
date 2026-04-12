@@ -287,6 +287,14 @@ class ProotManager @Inject constructor(
                 val resolvConf = File(rootfsDir, "etc/resolv.conf")
                 resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
                 Log.d(TAG, "Wrote resolv.conf")
+
+                // Drop a generic shell profile and a welcome README into
+                // /root/. These are vendor-neutral — they explain what the
+                // environment is, how to install tools, and how the "phone
+                // is the point of presence, remote machines are the compute"
+                // pattern composes with Haven's SSH primitives. No vendor
+                // CLIs, no cloned repositories, no hardcoded hosts.
+                seedRootHome(rootfsDir)
             }
 
             _state.value = SetupState.Ready
@@ -460,6 +468,35 @@ class ProotManager @Inject constructor(
         if (remainder > 0) {
             val skip = ByteArray(remainder.toInt())
             readFully(input, skip)
+        }
+    }
+
+    /**
+     * Copy the templated /root/.profile and /root/README.md out of the
+     * APK assets into the freshly extracted rootfs. Only writes files
+     * that don't already exist so users can customise without the next
+     * rootfs install clobbering their edits.
+     */
+    private fun seedRootHome(rootfsDir: File) {
+        val rootHome = File(rootfsDir, "root").apply { mkdirs() }
+        val assetsToCopy = mapOf(
+            "proot/root/profile" to ".profile",
+            "proot/root/README.md" to "README.md",
+        )
+        for ((assetPath, targetName) in assetsToCopy) {
+            val target = File(rootHome, targetName)
+            if (target.exists()) {
+                Log.d(TAG, "Preserving existing /root/$targetName")
+                continue
+            }
+            try {
+                context.assets.open(assetPath).use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                Log.d(TAG, "Seeded /root/$targetName from $assetPath")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to seed /root/$targetName: ${e.message}")
+            }
         }
     }
 
