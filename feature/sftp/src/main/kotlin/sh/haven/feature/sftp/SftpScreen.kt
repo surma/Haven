@@ -160,6 +160,7 @@ fun SftpScreen(
     val showFullscreenPreview by viewModel.showFullscreenPreview.collectAsState()
     val audioPreviewState by viewModel.audioPreviewState.collectAsState()
     val inputHasVideo by viewModel.inputHasVideo.collectAsState()
+    val previewIsRemote by viewModel.previewIsRemote.collectAsState()
 
     var showRenameDialog by remember { mutableStateOf<SftpEntry?>(null) }
 
@@ -939,7 +940,17 @@ fun SftpScreen(
                                     )
                                 }
                                 is SftpViewModel.PreviewState.Generating -> {
-                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                        if (previewIsRemote) {
+                                            Spacer(Modifier.height(8.dp))
+                                            Text(
+                                                "\u2601 Fetching from cloud\u2026",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
                                 }
                                 is SftpViewModel.PreviewState.Ready -> {
                                     val bitmap = remember(ps.imagePath) {

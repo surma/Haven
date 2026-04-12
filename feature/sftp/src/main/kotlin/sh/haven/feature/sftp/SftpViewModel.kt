@@ -152,12 +152,24 @@ class SftpViewModel @Inject constructor(
     private val _previewDuration = MutableStateFlow(0.0)
     val previewDuration: StateFlow<Double> = _previewDuration.asStateFlow()
 
-    /** Cached input path for preview — avoids re-downloading remote files. */
-    private var previewCachedInput: java.io.File? = null
+    /**
+     * Preview input source — may be a local file path, a downloaded cache
+     * file path, or an http:// URL pointing at the rclone media server.
+     * ffmpeg handles all three the same way via its protocol layer.
+     */
+    private var previewInputSource: String? = null
 
     /** Whether the input file has a real video stream (not just album art). */
     private val _inputHasVideo = MutableStateFlow(true)
     val inputHasVideo: StateFlow<Boolean> = _inputHasVideo.asStateFlow()
+
+    /**
+     * True when the preview is being generated from a remote URL (rclone).
+     * UI uses this to show a "fetching from cloud" hint during Generating
+     * states so the user understands why it's slower than local.
+     */
+    private val _previewIsRemote = MutableStateFlow(false)
+    val previewIsRemote: StateFlow<Boolean> = _previewIsRemote.asStateFlow()
 
     /** Entry currently shown in the convert dialog — stored in ViewModel to survive rotation. */
     private val _convertDialogEntry = MutableStateFlow<SftpEntry?>(null)
@@ -878,9 +890,17 @@ class SftpViewModel @Inject constructor(
     }
 
     /**
-     * Probe the duration of a media file and cache the input for preview.
-     * Called once when the convert dialog opens. For remote files, downloads
-     * to cache first so subsequent preview frames are fast.
+     * Probe the duration of a media file and set up the preview input source.
+     *
+     * For **local files**: uses the file path directly.
+     * For **rclone**: starts (or reuses) the rclone media HTTP server and
+     *   passes the `http://127.0.0.1:port/...` URL to ffmpeg. Rclone's VFS
+     *   disk cache handles chunked Range reads so we avoid downloading the
+     *   whole file just to show a preview frame.
+     * For **SFTP/SMB**: still downloads to cache first (no HTTP stream option).
+     *
+     * ffmpeg treats file paths and http:// URLs interchangeably via its
+     * protocol layer, so downstream preview generation is identical.
      */
     fun preparePreview(entry: SftpEntry) {
         val profileId = _activeProfileId.value ?: return
@@ -888,41 +908,61 @@ class SftpViewModel @Inject constructor(
             try {
                 _previewState.value = PreviewState.Generating
 
-                // Get or download input file
-                val inputFile = if (_isLocalProfile.value) {
-                    java.io.File(entry.path)
-                } else {
-                    val cached = java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}")
-                    if (!cached.exists() || cached.length() == 0L) {
-                        withContext(Dispatchers.IO) {
-                            cached.outputStream().use { out ->
-                                if (_isRcloneProfile.value) {
-                                    val remote = activeRcloneRemote ?: throw IllegalStateException("Rclone not connected")
-                                    rcloneClient.copyFile(remote, entry.path, cached.parent!!, cached.name)
-                                } else if (_isSmbProfile.value) {
-                                    val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
-                                    client.download(entry.path, out) { _, _ -> }
-                                } else {
-                                    val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
-                                    channel.get(entry.path, out, object : SftpProgressMonitor {
-                                        override fun init(op: Int, src: String, dest: String, max: Long) {}
-                                        override fun count(bytes: Long): Boolean = true
-                                        override fun end() {}
-                                    })
+                // Determine the input source for ffmpeg: local path, HTTP URL, or cached download
+                val inputSource: String
+                val isRemote: Boolean
+                when {
+                    _isLocalProfile.value -> {
+                        inputSource = entry.path
+                        isRemote = false
+                    }
+                    _isRcloneProfile.value -> {
+                        // Start the rclone media HTTP server on demand and
+                        // hand ffmpeg the URL directly — no bulk download.
+                        val port = ensureMediaServer()
+                        // Encode each path segment but leave slashes intact
+                        val encodedPath = entry.path
+                            .trimStart('/')
+                            .split('/')
+                            .joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+                        inputSource = "http://127.0.0.1:$port/$encodedPath"
+                        isRemote = true
+                        Log.d(TAG, "preparePreview: using rclone HTTP URL $inputSource")
+                    }
+                    else -> {
+                        // SFTP/SMB — download to cache once, then reuse
+                        val cached = java.io.File(appContext.cacheDir, "ffmpeg_in_${entry.name}")
+                        if (!cached.exists() || cached.length() == 0L) {
+                            withContext(Dispatchers.IO) {
+                                cached.outputStream().use { out ->
+                                    if (_isSmbProfile.value) {
+                                        val client = activeSmbClient ?: throw IllegalStateException("SMB not connected")
+                                        client.download(entry.path, out) { _, _ -> }
+                                    } else {
+                                        val channel = getOrOpenChannel(profileId) ?: throw IllegalStateException("Not connected")
+                                        channel.get(entry.path, out, object : SftpProgressMonitor {
+                                            override fun init(op: Int, src: String, dest: String, max: Long) {}
+                                            override fun count(bytes: Long): Boolean = true
+                                            override fun end() {}
+                                        })
+                                    }
                                 }
                             }
                         }
+                        inputSource = cached.absolutePath
+                        isRemote = false
                     }
-                    cached
                 }
-                previewCachedInput = inputFile
+                previewInputSource = inputSource
+                _previewIsRemote.value = isRemote
 
-                // Probe duration and detect video streams
+                // Probe duration and detect video streams (ffprobe uses HTTP Range requests
+                // for remote URLs — typically only reads ~200KB of moov atom)
                 val (durationSec, hasVideo) = withContext(Dispatchers.IO) {
                     val durResult = ffmpegExecutor.probe(listOf(
                         "-v", "error", "-show_entries", "format=duration",
                         "-of", "default=noprint_wrappers=1:nokey=1",
-                        inputFile.absolutePath,
+                        inputSource,
                     ))
                     val dur = durResult.stdout.trim().toDoubleOrNull() ?: 0.0
 
@@ -930,13 +970,13 @@ class SftpViewModel @Inject constructor(
                     val videoResult = ffmpegExecutor.probe(listOf(
                         "-v", "error", "-select_streams", "v",
                         "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
-                        "-of", "flat", inputFile.absolutePath,
+                        "-of", "flat", inputSource,
                     ))
                     val probeOut = videoResult.stdout
                     val hasVideoStream = probeOut.contains("codec_type=\"video\"")
                     val isAttachedPic = probeOut.contains("attached_pic=1")
                     val realVideo = hasVideoStream && !isAttachedPic
-                    Log.d(TAG, "preparePreview: duration=$dur hasVideo=$realVideo")
+                    Log.d(TAG, "preparePreview: duration=$dur hasVideo=$realVideo remote=$isRemote")
                     dur to realVideo
                 }
                 _previewDuration.value = durationSec
@@ -945,7 +985,7 @@ class SftpViewModel @Inject constructor(
                 // Generate initial frame at 10% into the file (video only)
                 if (hasVideo) {
                     val seekPos = (durationSec * 0.1).coerceAtLeast(0.0)
-                    generatePreviewFrame(inputFile, seekPos, emptyList())
+                    generatePreviewFrame(inputSource, seekPos, emptyList())
                 } else {
                     _previewState.value = PreviewState.Idle
                 }
@@ -958,20 +998,21 @@ class SftpViewModel @Inject constructor(
 
     /**
      * Generate a single preview frame with the current filters at the given seek position.
-     * Fast — typically completes in under a second.
+     * Fast for local files; for rclone URLs this triggers a Range-request fetch
+     * that completes in a few seconds (the moov atom and one keyframe).
      */
     fun previewFrame(
         seekSeconds: Double,
         videoFilters: List<sh.haven.core.ffmpeg.VideoFilter>,
     ) {
-        val inputFile = previewCachedInput ?: return
+        val source = previewInputSource ?: return
         viewModelScope.launch {
-            generatePreviewFrame(inputFile, seekSeconds, videoFilters)
+            generatePreviewFrame(source, seekSeconds, videoFilters)
         }
     }
 
     private suspend fun generatePreviewFrame(
-        inputFile: java.io.File,
+        inputSource: String,
         seekSeconds: Double,
         videoFilters: List<sh.haven.core.ffmpeg.VideoFilter>,
     ) {
@@ -981,7 +1022,7 @@ class SftpViewModel @Inject constructor(
             val outputFile = java.io.File(appContext.cacheDir, "ffmpeg_preview.mp4")
 
             val cmd = sh.haven.core.ffmpeg.TranscodeCommand.frameAt(
-                inputFile.absolutePath, outputFile.absolutePath, seekSeconds,
+                inputSource, outputFile.absolutePath, seekSeconds,
             ).videoFilters(videoFilters)
 
             val result = withContext(Dispatchers.IO) {
@@ -1012,7 +1053,10 @@ class SftpViewModel @Inject constructor(
                     _previewState.value = PreviewState.Failed("Failed to decode preview frame")
                 }
             } else {
-                Log.e(TAG, "ffmpeg frame extraction failed: exit=${result.exitCode} stderr=${result.stderr.take(500)}")
+                // Log the TAIL of stderr where the real error lives — the head is
+                // just the ffmpeg banner and configuration string.
+                val tail = result.stderr.takeLast(2000)
+                Log.e(TAG, "ffmpeg frame extraction failed: exit=${result.exitCode}\n--- stderr tail ---\n$tail")
                 _previewState.value = PreviewState.Failed(
                     "Frame extraction failed (exit ${result.exitCode})"
                 )
@@ -1028,9 +1072,11 @@ class SftpViewModel @Inject constructor(
         _previewState.value = PreviewState.Idle
         _previewDuration.value = 0.0
         _inputHasVideo.value = true
+        _previewIsRemote.value = false
         _showFullscreenPreview.value = false
+        previewInputSource = null
         stopAudioPreview()
-        // Don't delete cached input — convertFile reuses it
+        // Don't delete cached download file — convertFile reuses it
     }
 
     /**
@@ -1042,7 +1088,7 @@ class SftpViewModel @Inject constructor(
         audioFilters: List<sh.haven.core.ffmpeg.AudioFilter>,
         videoFilters: List<sh.haven.core.ffmpeg.VideoFilter> = emptyList(),
     ) {
-        val inputFile = previewCachedInput ?: return
+        val source = previewInputSource ?: return
         stopAudioPreview()
         viewModelScope.launch {
             try {
@@ -1051,7 +1097,7 @@ class SftpViewModel @Inject constructor(
 
                 // Build a short clip with audio filters
                 val cmd = sh.haven.core.ffmpeg.TranscodeCommand(
-                    inputFile.absolutePath, outputFile.absolutePath,
+                    source, outputFile.absolutePath,
                 ).seekTo(seekSeconds)
                     .duration(5.0)
                     .audioCodec("aac")
