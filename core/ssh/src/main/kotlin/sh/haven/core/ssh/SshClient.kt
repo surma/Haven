@@ -411,10 +411,54 @@ class SshClient : Closeable {
         sess.delPortForwardingR(remotePort)
     }
 
+    // --- Dynamic (SOCKS5) port forwarding (ssh -D) ---
+
+    /** Active dynamic forwards keyed by (bindAddress, bindPort). */
+    private val dynamicForwards = mutableMapOf<Pair<String, Int>, DynamicForwardServer>()
+
+    /**
+     * Start a SOCKS5 proxy server on the given local address/port. Each
+     * accepted connection is tunneled through an SSH `direct-tcpip` channel.
+     * Returns the port actually bound (useful if bindPort is 0).
+     */
+    fun setPortForwardingDynamic(bindAddress: String, bindPort: Int): Int {
+        val sess = session ?: throw IllegalStateException("Not connected")
+        val server = DynamicForwardServer(sess, bindAddress, bindPort)
+        val actualPort = server.start()
+        synchronized(dynamicForwards) {
+            // Key by the originally requested port so removal is deterministic;
+            // store under both keys if 0 was requested
+            dynamicForwards[bindAddress to actualPort] = server
+            if (bindPort == 0) {
+                dynamicForwards[bindAddress to 0] = server
+            }
+        }
+        return actualPort
+    }
+
+    /** Stop a dynamic forward previously started with [setPortForwardingDynamic]. */
+    fun delPortForwardingDynamic(bindAddress: String, bindPort: Int) {
+        synchronized(dynamicForwards) {
+            val server = dynamicForwards.remove(bindAddress to bindPort)
+            if (server != null) {
+                // Also remove any alias entry
+                dynamicForwards.entries.removeAll { it.value === server }
+                try { server.close() } catch (_: Exception) {}
+            }
+        }
+    }
+
     /**
      * Disconnect the current session and clear loaded identities.
      */
     fun disconnect() {
+        // Close any dynamic forward servers before tearing down the session
+        synchronized(dynamicForwards) {
+            dynamicForwards.values.toSet().forEach {
+                try { it.close() } catch (_: Exception) {}
+            }
+            dynamicForwards.clear()
+        }
         session?.disconnect()
         session = null
         agentForwardingEnabled = false

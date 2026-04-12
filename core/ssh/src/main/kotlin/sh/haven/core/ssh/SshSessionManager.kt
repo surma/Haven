@@ -35,7 +35,7 @@ class SshSessionManager @Inject constructor(
         val actualBoundPort: Int = bindPort,
     )
 
-    enum class PortForwardType { LOCAL, REMOTE }
+    enum class PortForwardType { LOCAL, REMOTE, DYNAMIC }
 
     data class SessionState(
         val sessionId: String,
@@ -522,6 +522,13 @@ class SshSessionManager @Inject constructor(
                         activated.add(rule)
                         Log.d(TAG, "Port forward activated: R ${rule.bindAddress}:${rule.bindPort} -> ${rule.targetHost}:${rule.targetPort}")
                     }
+                    PortForwardType.DYNAMIC -> {
+                        val actualPort = session.client.setPortForwardingDynamic(
+                            rule.bindAddress, rule.bindPort,
+                        )
+                        activated.add(rule.copy(actualBoundPort = actualPort))
+                        Log.d(TAG, "Port forward activated: D ${rule.bindAddress}:$actualPort (SOCKS5)")
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to activate port forward ${rule.ruleId}: ${e.message}")
@@ -543,6 +550,7 @@ class SshSessionManager @Inject constructor(
             when (forward.type) {
                 PortForwardType.LOCAL -> session.client.delPortForwardingL(forward.bindAddress, forward.actualBoundPort)
                 PortForwardType.REMOTE -> session.client.delPortForwardingR(forward.bindPort)
+                PortForwardType.DYNAMIC -> session.client.delPortForwardingDynamic(forward.bindAddress, forward.actualBoundPort)
             }
             Log.d(TAG, "Port forward removed: ${forward.type} ${forward.bindAddress}:${forward.bindPort}")
         } catch (e: Exception) {

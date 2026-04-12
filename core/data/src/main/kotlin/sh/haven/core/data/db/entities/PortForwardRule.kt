@@ -25,9 +25,16 @@ data class PortForwardRule(
     val type: Type,
     val bindAddress: String = "127.0.0.1",
     val bindPort: Int,
+    /** Ignored for DYNAMIC type (SOCKS proxy server has no single target). */
     val targetHost: String = "localhost",
-    val targetPort: Int,
+    /** Ignored for DYNAMIC type. */
+    val targetPort: Int = 0,
     val enabled: Boolean = true,
 ) {
-    enum class Type { LOCAL, REMOTE }
+    /**
+     * LOCAL  — `-L`: local port → remote host:port (forward into the tunnel)
+     * REMOTE — `-R`: remote port → local host:port (forward out of the tunnel)
+     * DYNAMIC — `-D`: local port becomes a SOCKS proxy server (tunnel to arbitrary hosts)
+     */
+    enum class Type { LOCAL, REMOTE, DYNAMIC }
 }

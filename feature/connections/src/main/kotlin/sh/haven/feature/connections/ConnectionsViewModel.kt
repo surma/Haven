@@ -2375,6 +2375,7 @@ class ConnectionsViewModel @Inject constructor(
         type = when (type) {
             PortForwardRule.Type.LOCAL -> SshSessionManager.PortForwardType.LOCAL
             PortForwardRule.Type.REMOTE -> SshSessionManager.PortForwardType.REMOTE
+            PortForwardRule.Type.DYNAMIC -> SshSessionManager.PortForwardType.DYNAMIC
         },
         bindAddress = bindAddress,
         bindPort = bindPort,

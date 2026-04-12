@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -136,6 +137,7 @@ private fun PortForwardCard(
     onDelete: () -> Unit,
 ) {
     val isLocal = rule.type == PortForwardRule.Type.LOCAL
+    val isDynamic = rule.type == PortForwardRule.Type.DYNAMIC
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -152,7 +154,11 @@ private fun PortForwardCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (isLocal) "LOCAL" else "REMOTE",
+                        when (rule.type) {
+                            PortForwardRule.Type.LOCAL -> "LOCAL"
+                            PortForwardRule.Type.REMOTE -> "REMOTE"
+                            PortForwardRule.Type.DYNAMIC -> "DYNAMIC (SOCKS5)"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -185,7 +191,79 @@ private fun PortForwardCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Visual flow: listen side --> tunnel --> destination side
+            if (isDynamic) {
+                // Dynamic layout: listen side --> SOCKS5 proxy (any destination via tunnel)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            Icons.Filled.PhoneAndroid,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "SOCKS5 proxy",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            "listens on",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            "${rule.bindAddress}:${rule.bindPort}",
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            Icons.Filled.Public,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "Any host",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            "via SSH tunnel",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+                return@Column
+            }
+
+            // Visual flow: listen side --> tunnel --> destination side (LOCAL/REMOTE)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -275,14 +353,19 @@ private fun PortForwardForm(
     onSave: (PortForwardRule) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val isNew = initial.bindPort == 0 && initial.targetPort == 0
+    val isNew = initial.bindPort == 0
     var type by remember { mutableStateOf(initial.type) }
     var bindAddress by remember { mutableStateOf(initial.bindAddress) }
     var bindPort by remember { mutableStateOf(if (isNew) "" else initial.bindPort.toString()) }
     var targetHost by remember { mutableStateOf(initial.targetHost) }
-    var targetPort by remember { mutableStateOf(if (isNew) "" else initial.targetPort.toString()) }
+    var targetPort by remember { mutableStateOf(
+        if (isNew || initial.targetPort == 0) "" else initial.targetPort.toString()
+    ) }
 
     val isLocal = type == PortForwardRule.Type.LOCAL
+    val isDynamic = type == PortForwardRule.Type.DYNAMIC
+    // "Outbound listener" = rule binds on this device (LOCAL or DYNAMIC)
+    val listenIsLocal = isLocal || isDynamic
 
     // Validate ports
     val bPort = bindPort.toIntOrNull()
@@ -292,22 +375,24 @@ private fun PortForwardForm(
         bindPort.isBlank() -> null
         bPort == null -> "Not a number"
         bPort !in 1..65535 -> "Must be 1\u201365535"
-        bPort < 1024 && isLocal -> "Privileged port (< 1024) — may fail without root"
+        bPort < 1024 && listenIsLocal -> "Privileged port (< 1024) — may fail without root"
         existingRules.any { it.id != initial.id && it.type == type && it.bindPort == bPort && it.bindAddress == bindAddress } ->
             "Already used by another rule"
         else -> null
     }
-    val bindPortIsWarning = bindPortError != null && bPort != null && bPort in 1..1023 && isLocal
+    val bindPortIsWarning = bindPortError != null && bPort != null && bPort in 1..1023 && listenIsLocal
 
     val targetPortError = when {
+        isDynamic -> null
         targetPort.isBlank() -> null
         tPort == null -> "Not a number"
         tPort !in 1..65535 -> "Must be 1\u201365535"
         else -> null
     }
 
-    val canSave = bPort != null && bPort in 1..65535 && tPort != null && tPort in 1..65535 &&
-        (bindPortIsWarning || bindPortError == null) && targetPortError == null
+    val canSave = bPort != null && bPort in 1..65535 &&
+        (isDynamic || (tPort != null && tPort in 1..65535 && targetPortError == null)) &&
+        (bindPortIsWarning || bindPortError == null)
 
     Column {
         // Type selector
@@ -321,12 +406,20 @@ private fun PortForwardForm(
                 label = { Text("Local (-L)") },
             )
             FilterChip(
-                selected = !isLocal,
+                selected = type == PortForwardRule.Type.REMOTE,
                 onClick = {
                     type = PortForwardRule.Type.REMOTE
                     bindAddress = "0.0.0.0"
                 },
                 label = { Text("Remote (-R)") },
+            )
+            FilterChip(
+                selected = isDynamic,
+                onClick = {
+                    type = PortForwardRule.Type.DYNAMIC
+                    bindAddress = "127.0.0.1"
+                },
+                label = { Text("Dynamic (-D)") },
             )
         }
 
@@ -334,8 +427,11 @@ private fun PortForwardForm(
 
         // Explanation of what the selected type does
         Text(
-            if (isLocal) "Listen on this device, forward to remote server"
-            else "Listen on remote server, forward to this device",
+            when (type) {
+                PortForwardRule.Type.LOCAL -> "Listen on this device, forward to remote server"
+                PortForwardRule.Type.REMOTE -> "Listen on remote server, forward to this device"
+                PortForwardRule.Type.DYNAMIC -> "Run a SOCKS5 proxy on this device, tunnel any destination through the server"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
@@ -343,7 +439,11 @@ private fun PortForwardForm(
 
         // Listen side — labels change based on direction
         Text(
-            if (isLocal) "Listen on (this device)" else "Listen on (remote server)",
+            when {
+                isDynamic -> "SOCKS5 proxy on (this device)"
+                isLocal -> "Listen on (this device)"
+                else -> "Listen on (remote server)"
+            },
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 4.dp),
@@ -377,37 +477,46 @@ private fun PortForwardForm(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Destination side — labels change based on direction
-        Text(
-            if (isLocal) "Forward to (remote server)" else "Forward to (this device)",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = targetHost,
-                onValueChange = { targetHost = it },
-                label = { Text("Host") },
-                singleLine = true,
-                modifier = Modifier.weight(1.5f),
-            )
-            OutlinedTextField(
-                value = targetPort,
-                onValueChange = { targetPort = it.filter { c -> c.isDigit() } },
-                label = { Text("Port") },
-                singleLine = true,
-                isError = targetPortError != null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        if (targetPortError != null) {
+        // Destination side (hidden for DYNAMIC — the SOCKS client chooses the destination per connection)
+        if (!isDynamic) {
             Text(
-                targetPortError,
+                if (isLocal) "Forward to (remote server)" else "Forward to (this device)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = targetHost,
+                    onValueChange = { targetHost = it },
+                    label = { Text("Host") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1.5f),
+                )
+                OutlinedTextField(
+                    value = targetPort,
+                    onValueChange = { targetPort = it.filter { c -> c.isDigit() } },
+                    label = { Text("Port") },
+                    singleLine = true,
+                    isError = targetPortError != null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (targetPortError != null) {
+                Text(
+                    targetPortError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                )
+            }
+        } else {
+            Text(
+                "SOCKS5 clients on your device can connect to ${bindAddress.ifEmpty { "127.0.0.1" }}:${bindPort.ifEmpty { "<port>" }} and request any destination. Each request opens a new direct-tcpip channel through the SSH server.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp),
             )
         }
 
@@ -424,14 +533,14 @@ private fun PortForwardForm(
             TextButton(
                 onClick = {
                     val bp = bPort ?: return@TextButton
-                    val tp = tPort ?: return@TextButton
+                    val tp = if (isDynamic) 0 else (tPort ?: return@TextButton)
                     onSave(
                         initial.copy(
                             profileId = profileId,
                             type = type,
                             bindAddress = bindAddress,
                             bindPort = bp,
-                            targetHost = targetHost,
+                            targetHost = if (isDynamic) "" else targetHost,
                             targetPort = tp,
                         ),
                     )
