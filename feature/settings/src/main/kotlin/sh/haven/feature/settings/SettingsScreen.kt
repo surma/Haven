@@ -64,7 +64,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -222,6 +221,7 @@ fun SettingsScreen(
         TopAppBar(title = { Text(stringResource(R.string.settings_title)) })
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
+        SettingsSection("Security & privacy")
         if (viewModel.biometricAvailable) {
             SettingsToggleItem(
                 icon = Icons.Filled.Fingerprint,
@@ -247,20 +247,6 @@ fun SettingsScreen(
             onCheckedChange = viewModel::setScreenSecurity,
         )
         SettingsToggleItem(
-            icon = Icons.Filled.DesktopWindows,
-            title = stringResource(R.string.settings_show_desktops_title),
-            subtitle = stringResource(R.string.settings_show_desktops_subtitle),
-            checked = showDesktopsCard,
-            onCheckedChange = viewModel::setShowDesktopsCard,
-        )
-        SettingsToggleItem(
-            icon = Icons.Filled.Laptop,
-            title = stringResource(R.string.settings_show_linux_vm_title),
-            subtitle = stringResource(R.string.settings_show_linux_vm_subtitle),
-            checked = showLinuxVmCard,
-            onCheckedChange = viewModel::setShowLinuxVmCard,
-        )
-        SettingsToggleItem(
             icon = Icons.Filled.History,
             title = stringResource(R.string.settings_connection_logging_title),
             subtitle = stringResource(R.string.settings_connection_logging_subtitle),
@@ -283,6 +269,38 @@ fun SettingsScreen(
             )
         }
 
+        SettingsSection("Appearance")
+        SettingsItem(
+            icon = Icons.Filled.ColorLens,
+            title = stringResource(R.string.settings_theme_title),
+            subtitle = theme.label,
+            onClick = { showThemeDialog = true },
+        )
+        SettingsItem(
+            icon = Icons.Filled.Palette,
+            title = stringResource(R.string.settings_color_scheme_title),
+            subtitle = colorScheme.label,
+            onClick = { showColorSchemeDialog = true },
+        )
+        SettingsItem(
+            icon = Icons.Filled.TextFields,
+            title = stringResource(R.string.settings_font_size_title),
+            subtitle = stringResource(R.string.settings_font_size_subtitle, fontSize),
+            onClick = { showFontSizeDialog = true },
+        )
+        run {
+            val currentLocale = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+            val currentLang = if (currentLocale.isEmpty) "System default"
+                else java.util.Locale.forLanguageTag(currentLocale.toLanguageTags()).displayLanguage
+            SettingsItem(
+                icon = Icons.Filled.Language,
+                title = stringResource(R.string.settings_language_title),
+                subtitle = currentLang,
+                onClick = { showLanguageDialog = true },
+            )
+        }
+
+        SettingsSection("Terminal")
         SettingsItem(
             icon = Icons.Filled.Terminal,
             title = stringResource(R.string.settings_session_persistence_title),
@@ -292,18 +310,6 @@ fun SettingsScreen(
                 sessionManager.label
             },
             onClick = { showSessionManagerDialog = true },
-        )
-        SettingsItem(
-            icon = Icons.Filled.TextFields,
-            title = stringResource(R.string.settings_font_size_title),
-            subtitle = stringResource(R.string.settings_font_size_subtitle, fontSize),
-            onClick = { showFontSizeDialog = true },
-        )
-        SettingsItem(
-            icon = Icons.Filled.Palette,
-            title = stringResource(R.string.settings_color_scheme_title),
-            subtitle = colorScheme.label,
-            onClick = { showColorSchemeDialog = true },
         )
         SettingsItem(
             icon = Icons.Filled.KeyboardAlt,
@@ -349,23 +355,22 @@ fun SettingsScreen(
             checked = allowStandardKeyboard,
             onCheckedChange = viewModel::setAllowStandardKeyboard,
         )
-        SettingsItem(
-            icon = Icons.Filled.ColorLens,
-            title = stringResource(R.string.settings_theme_title),
-            subtitle = theme.label,
-            onClick = { showThemeDialog = true },
+
+        SettingsSection("Connections screen")
+        SettingsToggleItem(
+            icon = Icons.Filled.DesktopWindows,
+            title = stringResource(R.string.settings_show_desktops_title),
+            subtitle = stringResource(R.string.settings_show_desktops_subtitle),
+            checked = showDesktopsCard,
+            onCheckedChange = viewModel::setShowDesktopsCard,
         )
-        run {
-            val currentLocale = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
-            val currentLang = if (currentLocale.isEmpty) "System default"
-                else java.util.Locale.forLanguageTag(currentLocale.toLanguageTags()).displayLanguage
-            SettingsItem(
-                icon = Icons.Filled.Language,
-                title = stringResource(R.string.settings_language_title),
-                subtitle = currentLang,
-                onClick = { showLanguageDialog = true },
-            )
-        }
+        SettingsToggleItem(
+            icon = Icons.Filled.Laptop,
+            title = stringResource(R.string.settings_show_linux_vm_title),
+            subtitle = stringResource(R.string.settings_show_linux_vm_subtitle),
+            checked = showLinuxVmCard,
+            onCheckedChange = viewModel::setShowLinuxVmCard,
+        )
         SettingsItem(
             icon = Icons.Filled.Reorder,
             title = stringResource(R.string.settings_screen_order_title),
@@ -373,8 +378,7 @@ fun SettingsScreen(
             onClick = { showScreenOrderDialog = true },
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
+        SettingsSection("Advanced")
         SettingsItem(
             icon = Icons.Filled.DesktopWindows,
             title = stringResource(R.string.settings_wayland_shell_title),
@@ -542,8 +546,7 @@ fun SettingsScreen(
             onClick = { showMediaExtensionsDialog = true },
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
+        SettingsSection("Backup")
         SettingsItem(
             icon = Icons.Filled.CloudUpload,
             title = stringResource(R.string.settings_export_backup_title),
@@ -571,8 +574,7 @@ fun SettingsScreen(
             )
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
+        SettingsSection("About")
         SettingsItem(
             icon = Icons.Filled.Info,
             title = stringResource(R.string.settings_about_title),
@@ -1454,6 +1456,22 @@ private fun FontSizeDialog(
                 Text(stringResource(R.string.common_cancel))
             }
         },
+    )
+}
+
+/**
+ * Section header rendered above a group of settings rows. Replaces
+ * `HorizontalDivider` as the visual grouping mechanism — a labelled
+ * header gives more orientation than a thin line, especially in a
+ * long scrolling list.
+ */
+@Composable
+private fun SettingsSection(title: String) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 24.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
     )
 }
 
