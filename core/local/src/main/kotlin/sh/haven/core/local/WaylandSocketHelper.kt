@@ -33,46 +33,82 @@ object WaylandSocketHelper {
         try {
             val clazz = Class.forName("rikka.shizuku.Shizuku")
 
-            // Check current state first
+            // Check current state first. This is usually false at app
+            // startup because the binder connection is async — the
+            // listeners below are the load-bearing path.
             val pingMethod = clazz.getMethod("pingBinder")
             shizukuBinderAlive = pingMethod.invoke(null) as Boolean
             Log.d(TAG, "Shizuku initial pingBinder: $shizukuBinderAlive")
 
-            // Register for binder received events
-            val addReceivedMethod = clazz.getMethod(
-                "addBinderReceivedListenerSticky",
-                Class.forName("rikka.shizuku.Shizuku\$OnBinderReceivedListener"),
-            )
-            val receivedProxy = java.lang.reflect.Proxy.newProxyInstance(
-                clazz.classLoader,
-                arrayOf(Class.forName("rikka.shizuku.Shizuku\$OnBinderReceivedListener")),
-            ) { _, _, _ ->
+            // Register for binder received events. The Sticky variant
+            // fires the callback immediately on the calling thread if
+            // the binder is already alive, so a successful invoke()
+            // here is usually enough to update shizukuBinderAlive for
+            // users who started Shizuku before launching Haven.
+            registerListener(
+                clazz = clazz,
+                addMethodName = "addBinderReceivedListenerSticky",
+                listenerIface = "rikka.shizuku.Shizuku\$OnBinderReceivedListener",
+                callbackMethod = "onBinderReceived",
+            ) {
                 Log.d(TAG, "Shizuku binder received")
                 shizukuBinderAlive = true
-                null
             }
-            addReceivedMethod.invoke(null, receivedProxy)
 
-            // Register for binder dead events
-            val addDeadMethod = clazz.getMethod(
-                "addBinderDeadListener",
-                Class.forName("rikka.shizuku.Shizuku\$OnBinderDeadListener"),
-            )
-            val deadProxy = java.lang.reflect.Proxy.newProxyInstance(
-                clazz.classLoader,
-                arrayOf(Class.forName("rikka.shizuku.Shizuku\$OnBinderDeadListener")),
-            ) { _, _, _ ->
+            registerListener(
+                clazz = clazz,
+                addMethodName = "addBinderDeadListener",
+                listenerIface = "rikka.shizuku.Shizuku\$OnBinderDeadListener",
+                callbackMethod = "onBinderDead",
+            ) {
                 Log.d(TAG, "Shizuku binder dead")
                 shizukuBinderAlive = false
-                null
             }
-            addDeadMethod.invoke(null, deadProxy)
 
             shizukuListenersRegistered = true
-            Log.d(TAG, "Shizuku binder listeners registered")
+            Log.d(TAG, "Shizuku binder listeners registered (alive=$shizukuBinderAlive)")
         } catch (e: Exception) {
-            Log.d(TAG, "Shizuku listener registration failed: ${e.message}")
+            Log.w(TAG, "Shizuku listener registration failed: ${e.javaClass.simpleName}: ${e.message}")
         }
+    }
+
+    /**
+     * Build a proxy for a Shizuku listener interface and register it.
+     *
+     * The tricky part: Shizuku's `addBinderReceivedListenerSticky`
+     * internally stores listeners in a collection, which calls
+     * `equals()` / `hashCode()` on the proxy during registration.
+     * Our InvocationHandler used to return `null` for everything,
+     * which causes a NullPointerException when Proxy tries to unbox
+     * `null` to `boolean` / `int`. That NPE was caught by the outer
+     * try and logged as "listener registration failed", silently
+     * leaving the binder-alive flag stuck at `false` even though
+     * Shizuku was running — this is the root cause of issue #82.
+     */
+    private inline fun registerListener(
+        clazz: Class<*>,
+        addMethodName: String,
+        listenerIface: String,
+        callbackMethod: String,
+        crossinline onInvoked: () -> Unit,
+    ) {
+        val iface = Class.forName(listenerIface)
+        val proxy = java.lang.reflect.Proxy.newProxyInstance(
+            clazz.classLoader,
+            arrayOf(iface),
+        ) { self, method, args ->
+            when (method.name) {
+                "equals" -> self === args?.getOrNull(0)
+                "hashCode" -> System.identityHashCode(self)
+                "toString" -> "HavenShizukuListener(${iface.simpleName})"
+                callbackMethod -> {
+                    onInvoked()
+                    null
+                }
+                else -> null
+            }
+        }
+        clazz.getMethod(addMethodName, iface).invoke(null, proxy)
     }
 
     // --- Logcat capture ---
