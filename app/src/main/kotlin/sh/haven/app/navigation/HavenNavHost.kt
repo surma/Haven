@@ -1,6 +1,5 @@
 package sh.haven.app.navigation
 
-import android.content.res.Configuration
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -47,8 +46,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +67,7 @@ import sh.haven.feature.terminal.TerminalScreen
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun HavenNavHost(
     preferencesRepository: UserPreferencesRepository,
@@ -172,8 +175,13 @@ fun HavenNavHost(
     val navItemWidths = remember { mutableStateMapOf<Int, Float>() }
     val haptic = LocalHapticFeedback.current
 
+    // Use WindowSizeClass (width >= Medium, i.e. >= 600dp) as the Material3-recommended
+    // signal for switching to a side rail.  This avoids triggering the rail on narrow
+    // landscape phones where it would eat more width than it saves, while also opting
+    // wide-enough portrait tablets into the rail.
+    val windowSizeClass = calculateWindowSizeClass(LocalContext.current as android.app.Activity)
     val useSideNavigation =
-        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        windowSizeClass.widthSizeClass >= WindowWidthSizeClass.Medium
 
     val pagerContent: @Composable (Modifier) -> Unit = { modifier ->
         HorizontalPager(
